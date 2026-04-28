@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Coffee Diary</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Coffee Diary">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#182635">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { width: 100%; height: 100%; overflow: hidden; }
+    body {
+      background: #182635;
+      font-family: 'DM Sans', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+    }
+    #root { display: flex; flex-direction: column; }
+    .scroll-y { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .scroll-y::-webkit-scrollbar { display: none; }
+    input, textarea {
+      background: none; border: none; outline: none;
+      font-family: 'DM Mono', monospace; font-weight: 300;
+      width: 100%; -webkit-appearance: none;
+    }
+    textarea { resize: none; }
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .slide-up { animation: slideUp 0.28s cubic-bezier(0.32,0.72,0,1) forwards; }
+    .fade-in  { animation: fadeIn  0.2s ease forwards; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useCallback } = React;
+
+// ── Palette ───────────────────────────────────────────────────────────────────
+const P = {
+  bg:         '#182635',
+  bgDeep:     '#0F1C29',
+  darkStroke: 'rgba(220,205,180,0.20)',
+  headerText: '#D8CAB4',
+  headerMuted:'#7A94A8',
+  cardBg:     'rgba(220,205,180,0.10)',
+  cardBg2:    'rgba(220,205,180,0.17)',
+  cardStroke: 'rgba(220,205,180,0.20)',
+  cardDark:   '#D8CAB4',
+  cardMuted:  '#7A94A8',
+  cafe:       '#D4976A',
+  brew:       '#7A9AB0',
+};
+
+const G = {
+  surface:    '#2a3d50',
+  border:     'rgba(240,228,204,0.12)',
+  label:      '#5a7a8a',
+  text:       '#d8c8a8',
+  placeholder:'#5a7a8a',
+  chipBorder: 'rgba(240,228,204,0.25)',
+};
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function genId() { return Math.random().toString(36).slice(2,10); }
+
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+function formatTime(iso) {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
+}
+function groupByDate(entries) {
+  const map = {};
+  entries.forEach(e => {
+    const day = e.date.slice(0,10);
+    if (!map[day]) map[day] = [];
+    map[day].push(e);
+  });
+  return Object.entries(map)
+    .sort(([a],[b]) => b.localeCompare(a))
+    .map(([day, items]) => ({
+      label: formatDate(day + 'T12:00:00'),
+      entries: items.sort((a,b) => b.date.localeCompare(a.date))
+    }));
+}
+function getMonthName() {
+  return new Date().toLocaleDateString('en-US', { month: 'long' });
+}
+function getMonthCount(entries) {
+  const n = new Date();
+  return entries.filter(e => {
+    const d = new Date(e.date);
+    return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+  }).length;
+}
+
+// ── localStorage hook ─────────────────────────────────────────────────────────
+function useLS(key, init) {
+  const [val, setVal] = useState(() => {
+    try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : init; }
+    catch { return init; }
+  });
+  const set = useCallback(v => {
+    setVal(v);
+    try { localStorage.setItem(key, JSON.stringify(v)); } catch {}
+  }, [key]);
+  return [val, set];
+}
+
+// CHUNK_2_GOES_HERE
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+  }
+</script>
+</body>
+</html>
