@@ -600,7 +600,286 @@ function BrewForm({ initial={}, onBack, onSave }) {
   );
 }
 
-// CHUNK_5_GOES_HERE
+// ── Bean Library ─────────────────────────────────────────────────────────────
+const BEAN_COLORS = ['#6B8FA8','#A8836B','#7A8A6A','#9A7A8A','#8A9A7A'];
+
+function BeanAvatar({ color }) {
+  return (
+    <div style={{ width:42, height:42, borderRadius:10, flexShrink:0,
+      background:P.cardBg, border:'0.5px solid '+P.cardStroke,
+      display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <svg width="22" height="22" viewBox="0 0 20 20">
+        <ellipse cx="10" cy="10" rx="7" ry="9" fill={color} opacity="0.55" />
+        <path d="M10 2 Q14 10 10 18" stroke={color} strokeWidth="1.2" fill="none" opacity="0.9" />
+      </svg>
+    </div>
+  );
+}
+
+function AddBeanForm({ onBack, onSave }) {
+  const [f, setF] = useState({ name:'', roaster:'', process:'Washed', rating:0 });
+  const set = (k,v) => setF(p=>({...p,[k]:v}));
+  return (
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
+      <NavBar title="Add Bean" onBack={onBack} onSave={()=>{
+        if (!f.name.trim()) return;
+        onSave({ id:genId(), brews:0, color:BEAN_COLORS[Math.floor(Math.random()*BEAN_COLORS.length)], ...f });
+      }} />
+      <div className="scroll-y" style={{ flex:1, padding:'14px 16px' }}>
+        <GhostField label="Bean Name" placeholder="Ethiopia Yirgacheffe…" value={f.name} onChange={v=>set('name',v)} />
+        <GhostField label="Roaster" placeholder="Counter Culture…" value={f.roaster} onChange={v=>set('roaster',v)} />
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Process</div>
+          <div style={{ display:'flex', gap:6 }}>
+            {['Washed','Natural','Honey'].map(p=><GhostChip key={p} label={p} active={f.process===p} onPress={()=>set('process',p)} />)}
+          </div>
+        </div>
+        <div style={{ marginBottom:16 }}>
+          <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
+          <RatingSquares n={f.rating} size={20} onChange={v=>set('rating',v)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BeanLibrary({ beans, onTab, onAdd, onAddBean }) {
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('All');
+  const filtered = beans.filter(b => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || b.name.toLowerCase().includes(q) || (b.roaster||'').toLowerCase().includes(q);
+    return matchSearch && (filter==='All' || b.process===filter);
+  });
+  return (
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
+      <div style={{ padding:'18px 16px 12px', paddingTop:'calc(18px + env(safe-area-inset-top))' }}>
+        <div style={{ fontSize:28, fontWeight:500, color:P.headerText, fontFamily:'Cormorant Garamond, serif', lineHeight:1 }}>Bean Library</div>
+        <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4 }}>
+          {beans.length} bean{beans.length!==1?'s':''} tracked
+        </div>
+        <div style={{ marginTop:12, background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:10, display:'flex', alignItems:'center', padding:'9px 12px' }}>
+          <input placeholder="Search beans, roasters…" value={search} onChange={e=>setSearch(e.target.value)}
+            style={{ fontSize:11, color:P.headerText, fontFamily:'DM Mono, monospace' }} />
+        </div>
+        <div style={{ display:'flex', gap:6, marginTop:10 }}>
+          {['All','Washed','Natural','Honey'].map(p=>(
+            <div key={p} onClick={()=>setFilter(p)} style={{ fontFamily:'DM Mono, monospace', fontSize:9,
+              padding:'4px 12px', borderRadius:20, cursor:'pointer',
+              border:'0.5px solid '+(filter===p?P.cafe:P.cardStroke),
+              background: filter===p?'rgba(212,151,106,0.18)':P.cardBg,
+              color: filter===p?P.cafe:P.headerMuted }}>{p}</div>
+          ))}
+        </div>
+      </div>
+      <div className="scroll-y" style={{ flex:1, padding:'0 16px' }}>
+        {filtered.map((b,i)=>(
+          <div key={i} style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke,
+            borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'center', gap:12, marginBottom:8 }}>
+            <BeanAvatar color={b.color} />
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:15, fontWeight:500, color:P.headerText,
+                fontFamily:'Cormorant Garamond, serif',
+                whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.name}</div>
+              <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:2 }}>
+                {[b.roaster,b.process].filter(Boolean).join(' · ')}
+              </div>
+              <div style={{ marginTop:8, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <RatingDots n={b.rating} />
+                <span style={{ fontSize:9, color:P.cafe, fontFamily:'DM Mono, monospace' }}>{b.brews} brew{b.brews!==1?'s':''}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+        <div onClick={onAddBean} style={{ border:'0.5px dashed '+P.cardStroke, borderRadius:14,
+          padding:'12px', textAlign:'center', marginBottom:8, cursor:'pointer' }}>
+          <span style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300 }}>+ add new bean</span>
+        </div>
+        <div style={{ height:16 }} />
+      </div>
+      <TabBar active={1} onTab={onTab} onAdd={onAdd} />
+    </div>
+  );
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function StatsDash({ entries, onTab, onAdd }) {
+  const [period, setPeriod] = useState('month');
+  const now = new Date();
+  const subset = period==='month'
+    ? entries.filter(e=>{ const d=new Date(e.date); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); })
+    : entries;
+  const cafe  = subset.filter(e=>e.type==='cafe');
+  const brews = subset.filter(e=>e.type==='brew');
+  const rats  = subset.filter(e=>e.rating>0).map(e=>e.rating);
+  const avg   = rats.length ? (rats.reduce((a,b)=>a+b,0)/rats.length).toFixed(1) : '—';
+
+  const barData = Array.from({length:16},(_,i)=>{
+    const d=new Date(); d.setDate(d.getDate()-(15-i));
+    return entries.filter(e=>e.date.startsWith(d.toISOString().slice(0,10))).length;
+  });
+  const maxBar = Math.max(...barData,1);
+
+  const methodMap = {};
+  brews.forEach(e=>{ const m=e.method||'Other'; methodMap[m]=(methodMap[m]||0)+1; });
+  const topMethods = Object.entries(methodMap).sort((a,b)=>b[1]-a[1]).slice(0,3)
+    .map(([m,c])=>({ m, p:Math.round((c/(brews.length||1))*100) }));
+
+  const stats = [
+    { l:'Total Coffees', v:String(subset.length), s:period==='month'?'this month':'all time' },
+    { l:'Avg Rating',    v:avg,                    s:'out of 5' },
+    { l:'Cafés Visited', v:String(cafe.length),    s:'café visits' },
+    { l:'Home Brews',    v:String(brews.length),   s:period==='month'?'this month':'all time' },
+  ];
+
+  const d1=new Date(); d1.setDate(d1.getDate()-15);
+  const fmt=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
+      <div style={{ padding:'18px 16px 12px', paddingTop:'calc(18px + env(safe-area-inset-top))' }}>
+        <div style={{ fontSize:28, fontWeight:500, color:P.headerText, fontFamily:'Cormorant Garamond, serif', lineHeight:1 }}>Insights</div>
+        <div style={{ display:'inline-flex', marginTop:12, background:P.cardBg,
+          border:'0.5px solid '+P.cardStroke, borderRadius:20, padding:3, gap:2 }}>
+          {[['month','This Month'],['all','All Time']].map(([val,lbl])=>(
+            <div key={val} onClick={()=>setPeriod(val)} style={{ fontFamily:'DM Mono, monospace', fontSize:9,
+              padding:'4px 12px', borderRadius:16, cursor:'pointer', transition:'all 0.15s',
+              background: period===val?P.cardBg2:'transparent',
+              color: period===val?P.headerText:P.headerMuted }}>{lbl}</div>
+          ))}
+        </div>
+      </div>
+      <div className="scroll-y" style={{ flex:1, padding:'0 16px 8px' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+          {stats.map((s,i)=>(
+            <div key={i} style={{ background:P.cardBg2, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 13px' }}>
+              <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:5 }}>{s.l}</div>
+              <div style={{ fontSize:30, fontWeight:400, color:P.headerText, fontFamily:'Cormorant Garamond, serif', lineHeight:1 }}>{s.v}</div>
+              <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:3 }}>{s.s}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 13px', marginBottom:8 }}>
+          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>Coffees per day</div>
+          <div style={{ display:'flex', alignItems:'flex-end', gap:3, height:56 }}>
+            {barData.map((v,i)=>(
+              <div key={i} style={{ flex:1, height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end' }}>
+                <div style={{ width:'100%', borderRadius:'2px 2px 0 0',
+                  height: v===0?3:`${(v/maxBar)*100}%`, opacity:v===0?0.3:1,
+                  background: i===barData.length-1?P.cafe:P.cardBg2,
+                  border:'0.5px solid '+(i===barData.length-1?P.cafe:P.cardStroke) }} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display:'flex', justifyContent:'space-between', marginTop:6 }}>
+            <span style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>{fmt(d1)}</span>
+            <span style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>{fmt(now)}</span>
+          </div>
+        </div>
+        {topMethods.length>0 && (
+          <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 13px', marginBottom:8 }}>
+            <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>Top Brew Methods</div>
+            {topMethods.map((r,i)=>(
+              <div key={i} style={{ marginBottom: i<topMethods.length-1?10:0 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:4 }}>
+                  <span style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>{r.m}</span>
+                  <span style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>{r.p}%</span>
+                </div>
+                <div style={{ height:4, borderRadius:3, background:P.cardBg2 }}>
+                  <div style={{ width:r.p+'%', height:'100%', borderRadius:3, background:i===0?P.cafe:P.brew, transition:'width 0.3s' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ height:16 }} />
+      </div>
+      <TabBar active={3} onTab={onTab} onAdd={onAdd} />
+    </div>
+  );
+}
+
+// ── Profile ───────────────────────────────────────────────────────────────────
+function ProfileScreen({ entries, beans, onTab, onAdd }) {
+  const total = entries.length;
+  const cafe  = entries.filter(e=>e.type==='cafe').length;
+  const brew  = entries.filter(e=>e.type==='brew').length;
+  return (
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
+      <div style={{ padding:'24px 16px 16px', paddingTop:'calc(24px + env(safe-area-inset-top))',
+        display:'flex', flexDirection:'column', alignItems:'center' }}>
+        <div style={{ width:72, height:72, borderRadius:'50%', background:P.cardBg2,
+          border:'0.5px solid '+P.cardStroke, display:'flex', alignItems:'center',
+          justifyContent:'center', marginBottom:12, fontSize:32 }}>☕</div>
+        <div style={{ fontSize:20, fontWeight:500, color:P.headerText, fontFamily:'Cormorant Garamond, serif' }}>Coffee Diary</div>
+        <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4 }}>Your personal coffee journal</div>
+      </div>
+      <div className="scroll-y" style={{ flex:1, padding:'0 16px' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:16 }}>
+          {[['Total',total],['Café',cafe],['Brews',brew]].map(([l,v])=>(
+            <div key={l} style={{ background:P.cardBg2, border:'0.5px solid '+P.cardStroke,
+              borderRadius:14, padding:'12px 10px', textAlign:'center' }}>
+              <div style={{ fontSize:26, fontWeight:400, color:P.headerText, fontFamily:'Cormorant Garamond, serif', lineHeight:1 }}>{v}</div>
+              <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginTop:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>{l}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
+          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>About</div>
+          <div style={{ fontSize:12, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6 }}>
+            Track coffee experiences, at home or outside. Log cafés, home brews, tasting notes, and brew parameters — all in one place.
+          </div>
+        </div>
+        <div style={{ height:16 }} />
+      </div>
+      <TabBar active={4} onTab={onTab} onAdd={onAdd} />
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+function App() {
+  const [entries, setEntries] = useLS('coffee_entries', []);
+  const [beans,   setBeans]   = useLS('coffee_beans',   []);
+  const [view,    setView]    = useState('home');
+  const [showSheet, setSheet] = useState(false);
+  const [formInit,  setInit]  = useState({});
+
+  const goTab = t => {
+    setSheet(false);
+    setView(['home','beans',null,'stats','profile'][t]);
+  };
+
+  const saveEntry = entry => {
+    setEntries([entry, ...entries]);
+    setSheet(false);
+    setView('home');
+  };
+
+  const expand = (type, partial) => {
+    setInit(partial);
+    setSheet(false);
+    setView(type==='cafe' ? 'cafe-form' : 'brew-form');
+  };
+
+  const sp = { onTab:goTab, onAdd:()=>setSheet(true) };
+
+  return (
+    <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background:P.bg }}>
+      {view==='home'      && <HomeScreen    entries={entries} {...sp} />}
+      {view==='beans'     && <BeanLibrary   beans={beans}    {...sp} onAddBean={()=>setView('add-bean')} />}
+      {view==='stats'     && <StatsDash     entries={entries} {...sp} />}
+      {view==='profile'   && <ProfileScreen entries={entries} beans={beans} {...sp} />}
+      {view==='cafe-form' && <CafeForm  initial={formInit} onBack={()=>setView('home')} onSave={saveEntry} />}
+      {view==='brew-form' && <BrewForm  initial={formInit} onBack={()=>setView('home')} onSave={saveEntry} />}
+      {view==='add-bean'  && <AddBeanForm onBack={()=>setView('beans')}
+        onSave={b=>{ setBeans([b,...beans]); setView('beans'); }} />}
+      {showSheet && <QuickCaptureSheet onClose={()=>setSheet(false)} onSave={saveEntry} onExpand={expand} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 <script>
   if ('serviceWorker' in navigator) {
