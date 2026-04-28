@@ -1,5 +1,5 @@
 const CACHE = 'coffee-diary-v1';
-const ASSETS = ['/', '/index.html', '/manifest.json', '/icon.svg'];
+const ASSETS = ['/coffee_app/', '/coffee_app/index.html', '/coffee_app/manifest.json', '/coffee_app/icon.svg'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
