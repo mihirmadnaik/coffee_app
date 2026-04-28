@@ -1,0 +1,18 @@
+{
+  "name": "Coffee Diary",
+  "short_name": "Coffee",
+  "description": "Track your coffee experiences, at home or outside",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#182635",
+  "theme_color": "#182635",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
