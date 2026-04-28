@@ -382,7 +382,225 @@ function HomeScreen({ entries, onTab, onAdd }) {
   );
 }
 
-// CHUNK_4_GOES_HERE
+// ── Quick Capture Sheet ───────────────────────────────────────────────────────
+const TASTING_NOTES = ['Fruity','Floral','Nutty','Chocolatey','Bright','Smoky','Sweet','Clean'];
+const BREW_METHODS  = ['V60','Espresso','Chemex','Aeropress','French Press','Moka Pot'];
+const VIBE_TAGS     = ['Cozy','Busy','Quiet','Specialty','Work-friendly'];
+
+function QuickCaptureSheet({ onClose, onSave, onExpand }) {
+  const [type, setType]         = useState('cafe');
+  const [cafeName, setCafeName] = useState('');
+  const [drinkType, setDrink]   = useState('');
+  const [beanName, setBean]     = useState('');
+  const [method, setMethod]     = useState('');
+  const [rating, setRating]     = useState(0);
+
+  const handleSave = () => {
+    const base = { id:genId(), date:new Date().toISOString(), type, rating, tastingNotes:[], notes:'' };
+    const entry = type==='cafe'
+      ? { ...base, cafeName, drinkType, location:'', bean:'', price:'',
+          ratings:{overall:rating,aroma:0,taste:0,texture:0}, vibeTags:[], wouldVisitAgain:false }
+      : { ...base, beanName, method, roaster:'', dose:'', water:'', temp:'',
+          brewTime:'', grindSize:'', ratio:'', whatIdChange:'', recipe:'' };
+    onSave(entry);
+  };
+
+  const fieldStyle = { height:42, background:G.surface, border:'1px solid '+G.border,
+    borderRadius:10, display:'flex', alignItems:'center', padding:'0 14px' };
+  const labelStyle = { fontSize:8.5, color:P.cardMuted, fontFamily:'DM Mono, monospace',
+    marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' };
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:100, display:'flex', flexDirection:'column', justifyContent:'flex-end' }}>
+      <div className="fade-in" onClick={onClose}
+        style={{ position:'absolute', inset:0, background:'rgba(10,18,26,0.7)' }} />
+      <div className="slide-up" style={{ position:'relative', zIndex:1,
+        background:'rgba(24,38,53,0.97)', borderRadius:'20px 20px 0 0',
+        border:'0.5px solid '+P.cardStroke, borderBottom:'none',
+        padding:'0 16px', paddingBottom:'env(safe-area-inset-bottom)' }}>
+        <div style={{ width:36, height:3, background:P.cardStroke, borderRadius:3, margin:'10px auto 14px' }} />
+        <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+          {[['cafe','Café Visit'],['brew','Home Brew']].map(([val,lbl])=>(
+            <div key={val} onClick={()=>setType(val)} style={{ padding:'6px 16px', borderRadius:20,
+              fontSize:11, cursor:'pointer', fontFamily:'DM Mono, monospace', fontWeight:300,
+              background: type===val ? P.cafe : 'transparent',
+              color: type===val ? '#f0e4cc' : P.cardMuted,
+              border:'1px solid '+(type===val ? P.cafe : P.cardStroke), transition:'all 0.15s' }}>
+              {lbl}
+            </div>
+          ))}
+        </div>
+        {type==='cafe' ? (
+          <>
+            <div style={{ marginBottom:10 }}>
+              <div style={labelStyle}>Café Name</div>
+              <div style={fieldStyle}><input placeholder="Where did you go?" value={cafeName} onChange={e=>setCafeName(e.target.value)} style={{ fontSize:13, color:G.text }} /></div>
+            </div>
+            <div style={{ marginBottom:10 }}>
+              <div style={labelStyle}>Drink</div>
+              <div style={fieldStyle}><input placeholder="Flat White, Latte…" value={drinkType} onChange={e=>setDrink(e.target.value)} style={{ fontSize:13, color:G.text }} /></div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ marginBottom:10 }}>
+              <div style={labelStyle}>Bean Name</div>
+              <div style={fieldStyle}><input placeholder="What are you brewing?" value={beanName} onChange={e=>setBean(e.target.value)} style={{ fontSize:13, color:G.text }} /></div>
+            </div>
+            <div style={{ marginBottom:10 }}>
+              <div style={labelStyle}>Method</div>
+              <div style={fieldStyle}><input placeholder="V60, Espresso, Chemex…" value={method} onChange={e=>setMethod(e.target.value)} style={{ fontSize:13, color:G.text }} /></div>
+            </div>
+          </>
+        )}
+        <div style={{ marginBottom:14 }}>
+          <div style={labelStyle}>Quick Rating</div>
+          <RatingSquares n={rating} size={20} onChange={setRating} />
+        </div>
+        <div onClick={()=>onExpand(type,{cafeName,drinkType,beanName,method,rating})}
+          style={{ textAlign:'center', padding:'8px 0', borderTop:'0.5px solid '+P.cardStroke, marginBottom:10, cursor:'pointer' }}>
+          <span style={{ fontSize:10, color:P.cafe, fontFamily:'DM Mono, monospace' }}>+ add more details</span>
+        </div>
+        <div onClick={handleSave} style={{ background:P.cafe, borderRadius:10, padding:'13px',
+          textAlign:'center', marginBottom:12, cursor:'pointer',
+          boxShadow:'0 3px 10px rgba(212,151,106,0.3)' }}>
+          <span style={{ color:'#182635', fontSize:12, fontFamily:'DM Mono, monospace', letterSpacing:'0.04em' }}>save entry</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Café Full Form ────────────────────────────────────────────────────────────
+function CafeForm({ initial={}, onBack, onSave }) {
+  const [f, setF] = useState({
+    cafeName:'', location:'', drinkType:'', bean:'', price:'',
+    tastingNotes:[], ratings:{overall:0,aroma:0,taste:0,texture:0},
+    vibeTags:[], wouldVisitAgain:false, notes:'', ...initial
+  });
+  const set = (k,v) => setF(p=>({...p,[k]:v}));
+  const toggleArr = (k,v) => setF(p=>({ ...p, [k]: p[k].includes(v) ? p[k].filter(x=>x!==v) : [...p[k],v] }));
+  const setRating = (k,v) => setF(p=>({...p, ratings:{...p.ratings,[k]:v}}));
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
+      <NavBar title="Café Visit" onBack={onBack}
+        onSave={()=>onSave({id:initial.id||genId(), date:initial.date||new Date().toISOString(), type:'cafe', rating:f.ratings.overall, ...f})} />
+      <div className="scroll-y" style={{ flex:1, padding:'14px 16px' }}>
+        <GhostField label="Café Name" placeholder="Where did you go?" value={f.cafeName} onChange={v=>set('cafeName',v)} />
+        <GhostField label="Location" placeholder="City, neighbourhood…" value={f.location} onChange={v=>set('location',v)} />
+        <FormDivider />
+        <SectionHead label="The Coffee" />
+        <div style={{ height:8 }} />
+        <GhostField label="Drink Type" placeholder="Flat White, Espresso…" value={f.drinkType} onChange={v=>set('drinkType',v)} />
+        <GhostField label="Bean / Roaster" placeholder="Ethiopia, Colombia…" value={f.bean} onChange={v=>set('bean',v)} />
+        <GhostField label="Price" placeholder="$0.00" value={f.price} onChange={v=>set('price',v)} />
+        <FormDivider />
+        <SectionHead label="Tasting" />
+        <div style={{ height:8 }} />
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Notes</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+            {TASTING_NOTES.map(n=><GhostChip key={n} label={n} active={f.tastingNotes.includes(n)} onPress={()=>toggleArr('tastingNotes',n)} />)}
+          </div>
+        </div>
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
+          {['Overall','Aroma','Taste','Texture'].map(r=>(
+            <div key={r} style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8 }}>
+              <span style={{ fontSize:10, color:G.label, fontFamily:'DM Mono, monospace', width:54, flexShrink:0 }}>{r}</span>
+              <RatingSquares n={f.ratings[r.toLowerCase()]||0} size={16} onChange={v=>setRating(r.toLowerCase(),v)} />
+            </div>
+          ))}
+        </div>
+        <FormDivider />
+        <SectionHead label="Vibe" />
+        <div style={{ height:8 }} />
+        <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:14 }}>
+          {VIBE_TAGS.map(t=><GhostChip key={t} label={t} active={f.vibeTags.includes(t)} onPress={()=>toggleArr('vibeTags',t)} />)}
+        </div>
+        <div onClick={()=>set('wouldVisitAgain',!f.wouldVisitAgain)}
+          style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14, cursor:'pointer' }}>
+          <div style={{ width:16, height:16, borderRadius:4, flexShrink:0,
+            border:'0.5px solid '+(f.wouldVisitAgain?P.cafe:G.chipBorder),
+            background: f.wouldVisitAgain?P.cafe:G.surface,
+            display:'flex', alignItems:'center', justifyContent:'center' }}>
+            {f.wouldVisitAgain && <span style={{ fontSize:10, color:'#182635', lineHeight:1 }}>✓</span>}
+          </div>
+          <span style={{ fontSize:12, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>Would visit again</span>
+        </div>
+        <GhostField label="Notes" placeholder="Anything else to remember…" value={f.notes} onChange={v=>set('notes',v)} multiline />
+        <div style={{ height:32 }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Brew Full Form ────────────────────────────────────────────────────────────
+function BrewForm({ initial={}, onBack, onSave }) {
+  const [f, setF] = useState({
+    beanName:'', roaster:'', method:'V60',
+    dose:'', water:'', temp:'', brewTime:'', grindSize:'', ratio:'',
+    tastingNotes:[], rating:0, whatIdChange:'', recipe:'', ...initial
+  });
+  const set = (k,v) => setF(p=>({...p,[k]:v}));
+  const toggleNote = n => setF(p=>({ ...p, tastingNotes: p.tastingNotes.includes(n) ? p.tastingNotes.filter(x=>x!==n) : [...p.tastingNotes,n] }));
+
+  const params = [['Dose (g)','dose','15g'],['Water (ml)','water','250ml'],
+    ['Water Temp','temp','92°C'],['Brew Time','brewTime','3:30'],
+    ['Grind Size','grindSize','Medium-fine'],['Ratio','ratio','1:16']];
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
+      <NavBar title="Home Brew" onBack={onBack}
+        onSave={()=>onSave({id:initial.id||genId(), date:initial.date||new Date().toISOString(), type:'brew', ...f})} />
+      <div className="scroll-y" style={{ flex:1, padding:'14px 16px' }}>
+        <GhostField label="Bean Name" placeholder="Colombia Huila…" value={f.beanName} onChange={v=>set('beanName',v)} />
+        <GhostField label="Roaster" placeholder="Counter Culture, Intelligentsia…" value={f.roaster} onChange={v=>set('roaster',v)} />
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Brew Method</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+            {BREW_METHODS.map(m=><GhostChip key={m} label={m} active={f.method===m} onPress={()=>set('method',m)} />)}
+          </div>
+        </div>
+        <FormDivider />
+        <SectionHead label="Parameters" />
+        <div style={{ height:8 }} />
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:4 }}>
+          {params.map(([lbl,key,ph])=>(
+            <div key={key}>
+              <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' }}>{lbl}</div>
+              <div style={{ height:40, background:G.surface, border:'1px solid '+G.border, borderRadius:10, display:'flex', alignItems:'center', padding:'0 12px' }}>
+                <input placeholder={ph} value={f[key]} onChange={e=>set(key,e.target.value)} style={{ fontSize:12, color:G.text }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <FormDivider />
+        <SectionHead label="Tasting" />
+        <div style={{ height:8 }} />
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Notes</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+            {TASTING_NOTES.map(n=><GhostChip key={n} label={n} active={f.tastingNotes.includes(n)} onPress={()=>toggleNote(n)} />)}
+          </div>
+        </div>
+        <div style={{ marginBottom:16 }}>
+          <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
+          <RatingSquares n={f.rating} size={20} onChange={v=>set('rating',v)} />
+        </div>
+        <FormDivider />
+        <SectionHead label="Notes" />
+        <div style={{ height:8 }} />
+        <GhostField label="What I'd Change Next Time" placeholder="Try coarser grind…" value={f.whatIdChange} onChange={v=>set('whatIdChange',v)} multiline />
+        <GhostField label="Recipe / Steps" placeholder="Step-by-step notes…" value={f.recipe} onChange={v=>set('recipe',v)} multiline />
+        <div style={{ height:32 }} />
+      </div>
+    </div>
+  );
+}
+
+// CHUNK_5_GOES_HERE
 </script>
 <script>
   if ('serviceWorker' in navigator) {
