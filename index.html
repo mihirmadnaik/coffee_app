@@ -44,7 +44,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useCallback } = React;
+const { useState, useCallback, useRef } = React;
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const P = {
@@ -288,7 +288,7 @@ function MiniCalendar({ entries, onClose }) {
 }
 
 // ── Home Screen ───────────────────────────────────────────────────────────────
-function HomeScreen({ entries, onTab, onAdd }) {
+function HomeScreen({ entries, onTab, onAdd, onEntryPress }) {
   const [calOpen, setCalOpen] = useState(false);
   const groups = groupByDate(entries);
   return (
@@ -346,8 +346,9 @@ function HomeScreen({ entries, onTab, onAdd }) {
               <div style={{ flex:1, height:'0.5px', background:P.darkStroke }} />
             </div>
             {g.entries.map((e,ei)=>(
-              <div key={ei} style={{ display:'flex', alignItems:'center',
-                marginBottom:6, background:P.cardBg,
+              <div key={ei} onClick={()=>onEntryPress&&onEntryPress(e)}
+                style={{ display:'flex', alignItems:'center',
+                marginBottom:6, background:P.cardBg, cursor:'pointer',
                 border:'0.5px solid '+P.cardStroke, borderRadius:10, overflow:'hidden' }}>
                 <div style={{ width:4, alignSelf:'stretch', flexShrink:0,
                   background: e.type==='cafe' ? P.cafe : P.brew }} />
@@ -472,20 +473,29 @@ function QuickCaptureSheet({ onClose, onSave, onExpand }) {
 }
 
 // ── Café Full Form ────────────────────────────────────────────────────────────
-function CafeForm({ initial={}, onBack, onSave }) {
-  const [f, setF] = useState({
-    cafeName:'', location:'', drinkType:'', bean:'', price:'',
+function CafeForm({ initial={}, onBack, onSave, onUpdate }) {
+  const defaults = { cafeName:'', location:'', drinkType:'', bean:'', price:'',
     tastingNotes:[], ratings:{overall:0,aroma:0,taste:0,texture:0},
-    vibeTags:[], wouldVisitAgain:false, notes:'', ...initial
-  });
+    vibeTags:[], wouldVisitAgain:false, notes:'' };
+  const [f, setF] = useState({ ...defaults, ...initial });
+  const initStr = useRef(JSON.stringify({ ...defaults, ...initial }));
   const set = (k,v) => setF(p=>({...p,[k]:v}));
   const toggleArr = (k,v) => setF(p=>({ ...p, [k]: p[k].includes(v) ? p[k].filter(x=>x!==v) : [...p[k],v] }));
   const setRating = (k,v) => setF(p=>({...p, ratings:{...p.ratings,[k]:v}}));
+  const hasChanges = JSON.stringify(f) !== initStr.current;
+
+  const buildEntry = () => ({ id:initial.id||genId(), date:initial.date||new Date().toISOString(), type:'cafe', rating:f.ratings.overall, ...f });
+  const handleSave = () => { onUpdate ? onUpdate(buildEntry()) : onSave(buildEntry()); };
+  const handleBack = () => {
+    if (hasChanges) {
+      if (window.confirm('Save changes before leaving?')) handleSave();
+      else onBack();
+    } else onBack();
+  };
 
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
-      <NavBar title="Café Visit" onBack={onBack}
-        onSave={()=>onSave({id:initial.id||genId(), date:initial.date||new Date().toISOString(), type:'cafe', rating:f.ratings.overall, ...f})} />
+      <NavBar title="Café Visit" onBack={handleBack} onSave={handleSave} />
       <div className="scroll-y" style={{ flex:1, padding:'14px 16px' }}>
         <GhostField label="Café Name" placeholder="Where did you go?" value={f.cafeName} onChange={v=>set('cafeName',v)} />
         <GhostField label="Location" placeholder="City, neighbourhood…" value={f.location} onChange={v=>set('location',v)} />
@@ -537,14 +547,23 @@ function CafeForm({ initial={}, onBack, onSave }) {
 }
 
 // ── Brew Full Form ────────────────────────────────────────────────────────────
-function BrewForm({ initial={}, onBack, onSave }) {
-  const [f, setF] = useState({
-    beanName:'', roaster:'', method:'V60',
-    dose:'', water:'', temp:'', brewTime:'', grindSize:'', ratio:'',
-    tastingNotes:[], rating:0, whatIdChange:'', recipe:'', ...initial
-  });
+function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[] }) {
+  const defaults = { beanName:'', roaster:'', method:'V60', dose:'', water:'',
+    temp:'', brewTime:'', grindSize:'', ratio:'', tastingNotes:[], rating:0, whatIdChange:'', recipe:'' };
+  const [f, setF] = useState({ ...defaults, ...initial });
+  const initStr = useRef(JSON.stringify({ ...defaults, ...initial }));
   const set = (k,v) => setF(p=>({...p,[k]:v}));
   const toggleNote = n => setF(p=>({ ...p, tastingNotes: p.tastingNotes.includes(n) ? p.tastingNotes.filter(x=>x!==n) : [...p.tastingNotes,n] }));
+  const hasChanges = JSON.stringify(f) !== initStr.current;
+
+  const buildEntry = () => ({ id:initial.id||genId(), date:initial.date||new Date().toISOString(), type:'brew', ...f });
+  const handleSave = () => { onUpdate ? onUpdate(buildEntry()) : onSave(buildEntry()); };
+  const handleBack = () => {
+    if (hasChanges) {
+      if (window.confirm('Save changes before leaving?')) handleSave();
+      else onBack();
+    } else onBack();
+  };
 
   const params = [['Dose (g)','dose','15g'],['Water (ml)','water','250ml'],
     ['Water Temp','temp','92°C'],['Brew Time','brewTime','3:30'],
@@ -552,10 +571,9 @@ function BrewForm({ initial={}, onBack, onSave }) {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
-      <NavBar title="Home Brew" onBack={onBack}
-        onSave={()=>onSave({id:initial.id||genId(), date:initial.date||new Date().toISOString(), type:'brew', ...f})} />
+      <NavBar title="Home Brew" onBack={handleBack} onSave={handleSave} />
       <div className="scroll-y" style={{ flex:1, padding:'14px 16px' }}>
-        <GhostField label="Bean Name" placeholder="Colombia Huila…" value={f.beanName} onChange={v=>set('beanName',v)} />
+        <BeanPicker beans={beans} value={f.beanName} onChange={v=>set('beanName',v)} />
         <GhostField label="Roaster" placeholder="Counter Culture, Intelligentsia…" value={f.roaster} onChange={v=>set('roaster',v)} />
         <div style={{ marginBottom:14 }}>
           <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Brew Method</div>
@@ -616,15 +634,23 @@ function BeanAvatar({ color }) {
   );
 }
 
-function AddBeanForm({ onBack, onSave }) {
-  const [f, setF] = useState({ name:'', roaster:'', process:'Washed', rating:0 });
+function AddBeanForm({ initial={}, onBack, onSave, onUpdate }) {
+  const [f, setF] = useState({ name:'', roaster:'', process:'Washed', rating:0, ...initial });
+  const initStr = useRef(JSON.stringify({ name:'', roaster:'', process:'Washed', rating:0, ...initial }));
   const set = (k,v) => setF(p=>({...p,[k]:v}));
+  const hasChanges = JSON.stringify(f) !== initStr.current;
+  const handleSave = () => {
+    if (!f.name.trim()) return;
+    const bean = { id:initial.id||genId(), brews:initial.brews||0, color:initial.color||BEAN_COLORS[Math.floor(Math.random()*BEAN_COLORS.length)], ...f };
+    onUpdate ? onUpdate(bean) : onSave(bean);
+  };
+  const handleBack = () => {
+    if (hasChanges) { if (window.confirm('Save changes before leaving?')) handleSave(); else onBack(); }
+    else onBack();
+  };
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
-      <NavBar title="Add Bean" onBack={onBack} onSave={()=>{
-        if (!f.name.trim()) return;
-        onSave({ id:genId(), brews:0, color:BEAN_COLORS[Math.floor(Math.random()*BEAN_COLORS.length)], ...f });
-      }} />
+      <NavBar title={initial.id ? 'Edit Bean' : 'Add Bean'} onBack={handleBack} onSave={handleSave} />
       <div className="scroll-y" style={{ flex:1, padding:'14px 16px' }}>
         <GhostField label="Bean Name" placeholder="Ethiopia Yirgacheffe…" value={f.name} onChange={v=>set('name',v)} />
         <GhostField label="Roaster" placeholder="Counter Culture…" value={f.roaster} onChange={v=>set('roaster',v)} />
@@ -643,7 +669,7 @@ function AddBeanForm({ onBack, onSave }) {
   );
 }
 
-function BeanLibrary({ beans, onTab, onAdd, onAddBean }) {
+function BeanLibrary({ beans, onTab, onAdd, onAddBean, onBeanPress }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const filtered = beans.filter(b => {
@@ -674,7 +700,8 @@ function BeanLibrary({ beans, onTab, onAdd, onAddBean }) {
       </div>
       <div className="scroll-y" style={{ flex:1, padding:'0 16px' }}>
         {filtered.map((b,i)=>(
-          <div key={i} style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke,
+          <div key={i} onClick={()=>onBeanPress&&onBeanPress(b)}
+            style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, cursor:'pointer',
             borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'center', gap:12, marginBottom:8 }}>
             <BeanAvatar color={b.color} />
             <div style={{ flex:1, minWidth:0 }}>
@@ -837,43 +864,240 @@ function ProfileScreen({ entries, beans, onTab, onAdd }) {
   );
 }
 
+// ── Detail helpers ────────────────────────────────────────────────────────────
+function DetailRow({ label, value }) {
+  if (!value) return null;
+  return (
+    <div style={{ marginBottom:10 }}>
+      <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace',
+        marginBottom:3, letterSpacing:'0.1em', textTransform:'uppercase' }}>{label}</div>
+      <div style={{ fontSize:13, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.5 }}>{value}</div>
+    </div>
+  );
+}
+
+function BeanPicker({ beans=[], value='', onChange }) {
+  const [open, setOpen] = useState(false);
+  const [customMode, setCustomMode] = useState(beans.length===0 || (!!value && !beans.some(b=>b.name===value)));
+  if (customMode || beans.length===0) return (
+    <div style={{ marginBottom:12 }}>
+      <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace',
+        marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' }}>Bean Name</div>
+      <div style={{ height:42, background:G.surface, border:'1px solid '+G.border,
+        borderRadius:10, display:'flex', alignItems:'center', padding:'0 14px' }}>
+        <input placeholder="Enter bean name…" value={value}
+          onChange={e=>onChange(e.target.value)} style={{ fontSize:12, color:G.text }} />
+      </div>
+      {beans.length>0 && (
+        <div onClick={()=>{ setCustomMode(false); onChange(''); }}
+          style={{ fontSize:9, color:P.cafe, marginTop:5, fontFamily:'DM Mono, monospace', cursor:'pointer' }}>
+          ← choose from saved beans
+        </div>
+      )}
+    </div>
+  );
+  return (
+    <div style={{ marginBottom:12 }}>
+      <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace',
+        marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' }}>Bean Name</div>
+      <div onClick={()=>setOpen(o=>!o)} style={{ height:42, background:G.surface,
+        border:'1px solid '+(open?P.cafe:G.border),
+        borderRadius: open ? '10px 10px 0 0' : 10,
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        padding:'0 14px', cursor:'pointer' }}>
+        <span style={{ fontSize:12, color:value?G.text:G.placeholder,
+          fontFamily:'DM Mono, monospace', fontWeight:300 }}>{value||'Select a bean…'}</span>
+        <span style={{ fontSize:9, color:G.label }}>{open?'▲':'▼'}</span>
+      </div>
+      {open && (
+        <div style={{ background:G.surface, border:'1px solid '+P.cafe,
+          borderTop:'none', borderRadius:'0 0 10px 10px', overflow:'hidden' }}>
+          {beans.map(b=>(
+            <div key={b.id} onClick={()=>{ onChange(b.name); setOpen(false); }}
+              style={{ padding:'10px 14px', borderBottom:'0.5px solid '+G.border,
+                cursor:'pointer', background:b.name===value?'rgba(212,151,106,0.12)':'transparent',
+                display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div>
+                <div style={{ fontSize:12, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{b.name}</div>
+                {b.roaster && <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{b.roaster}</div>}
+              </div>
+              {b.name===value && <span style={{ fontSize:9, color:P.cafe }}>✓</span>}
+            </div>
+          ))}
+          <div onClick={()=>{ setCustomMode(true); setOpen(false); onChange(''); }}
+            style={{ padding:'10px 14px', cursor:'pointer' }}>
+            <span style={{ fontSize:11, color:P.cafe, fontFamily:'DM Mono, monospace' }}>+ enter new bean name</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Entry Detail ──────────────────────────────────────────────────────────────
+function EntryDetail({ entry, onBack, onEdit }) {
+  const isBrew = entry.type === 'brew';
+  const title = isBrew ? (entry.beanName||'Unnamed Brew') : (entry.cafeName||'Unnamed Café');
+  const dateStr = new Date(entry.date).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  return (
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
+      <div style={{ padding:'8px 16px', paddingTop:'calc(8px + env(safe-area-inset-top))',
+        display:'flex', justifyContent:'space-between', alignItems:'center',
+        borderBottom:'0.5px solid rgba(240,228,204,0.15)', background:P.bg, flexShrink:0 }}>
+        <div onClick={onBack} style={{ fontSize:11, color:P.cafe, cursor:'pointer', padding:'4px 0' }}>← Back</div>
+        <div style={{ fontSize:13, fontWeight:500, color:G.text,
+          fontFamily:'Cormorant Garamond, serif', letterSpacing:'0.04em' }}>
+          {isBrew ? 'Home Brew' : 'Café Visit'}
+        </div>
+        <div onClick={onEdit} style={{ fontSize:11, color:P.cafe, fontWeight:600, cursor:'pointer', padding:'4px 0' }}>Edit</div>
+      </div>
+      <div className="scroll-y" style={{ flex:1, padding:'16px' }}>
+        <div style={{ marginBottom:16 }}>
+          <div style={{ fontSize:24, fontWeight:500, color:P.headerText,
+            fontFamily:'Cormorant Garamond, serif', lineHeight:1.2 }}>{title}</div>
+          {!isBrew && entry.location && <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4 }}>{entry.location}</div>}
+          {isBrew && entry.roaster && <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4 }}>{entry.roaster}</div>}
+          <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:6 }}>
+            {dateStr} · {formatTime(entry.date)}
+          </div>
+        </div>
+        {!isBrew && (
+          <>
+            {(entry.drinkType||entry.bean||entry.price) && (<><FormDivider /><SectionHead label="The Coffee" /><div style={{height:6}}/><DetailRow label="Drink" value={entry.drinkType} /><DetailRow label="Bean / Roaster" value={entry.bean} /><DetailRow label="Price" value={entry.price} /></>)}
+            {entry.tastingNotes?.length>0 && (<><FormDivider /><SectionHead label="Tasting" /><div style={{height:6}}/><div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>{entry.tastingNotes.map(n=><GhostChip key={n} label={n} active />)}</div></>)}
+            {entry.ratings && Object.values(entry.ratings).some(v=>v>0) && (
+              <div style={{marginBottom:10}}>
+                {['Overall','Aroma','Taste','Texture'].filter(r=>entry.ratings[r.toLowerCase()]>0).map(r=>(
+                  <div key={r} style={{display:'flex',alignItems:'center',gap:12,marginBottom:6}}>
+                    <span style={{fontSize:10,color:G.label,fontFamily:'DM Mono, monospace',width:54,flexShrink:0}}>{r}</span>
+                    <RatingSquares n={entry.ratings[r.toLowerCase()]} size={14} />
+                  </div>
+                ))}
+              </div>
+            )}
+            {(entry.vibeTags?.length>0||entry.wouldVisitAgain) && (<><FormDivider /><SectionHead label="Vibe" /><div style={{height:6}}/>
+              {entry.vibeTags?.length>0 && <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>{entry.vibeTags.map(t=><GhostChip key={t} label={t} active />)}</div>}
+              {entry.wouldVisitAgain && <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}><div style={{width:16,height:16,borderRadius:4,background:P.cafe,display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:10,color:'#182635'}}>✓</span></div><span style={{fontSize:12,color:G.text,fontFamily:'DM Mono, monospace',fontWeight:300}}>Would visit again</span></div>}
+            </>)}
+          </>
+        )}
+        {isBrew && (
+          <>
+            <FormDivider />
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:9,color:G.label,fontFamily:'DM Mono, monospace',marginBottom:6,letterSpacing:'0.1em',textTransform:'uppercase'}}>Method</div>
+              {entry.method && <div style={{display:'inline-block'}}><GhostChip label={entry.method} active /></div>}
+            </div>
+            {(entry.dose||entry.water||entry.temp||entry.brewTime||entry.grindSize||entry.ratio) && (
+              <><FormDivider /><SectionHead label="Parameters" /><div style={{height:6}}/>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                  {[['Dose',entry.dose],['Water',entry.water],['Temp',entry.temp],['Time',entry.brewTime],['Grind',entry.grindSize],['Ratio',entry.ratio]].filter(([,v])=>v).map(([l,v])=>(
+                    <div key={l}>
+                      <div style={{fontSize:8,color:G.label,fontFamily:'DM Mono, monospace',letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:2}}>{l}</div>
+                      <div style={{fontSize:13,color:G.text,fontFamily:'DM Mono, monospace',fontWeight:300}}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            {entry.tastingNotes?.length>0 && (<><FormDivider /><SectionHead label="Tasting" /><div style={{height:6}}/><div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>{entry.tastingNotes.map(n=><GhostChip key={n} label={n} active />)}</div></>)}
+            {entry.rating>0 && <div style={{marginBottom:10}}><div style={{fontSize:9,color:G.label,fontFamily:'DM Mono, monospace',marginBottom:6,letterSpacing:'0.1em',textTransform:'uppercase'}}>Rating</div><RatingSquares n={entry.rating} size={16} /></div>}
+          </>
+        )}
+        {(entry.notes||entry.whatIdChange||entry.recipe) && (
+          <><FormDivider /><SectionHead label="Notes" /><div style={{height:6}}/>
+            {entry.notes && <div style={{fontSize:12,color:G.text,fontFamily:'DM Mono, monospace',fontWeight:300,lineHeight:1.6,marginBottom:10}}>{entry.notes}</div>}
+            <DetailRow label="What I'd Change" value={entry.whatIdChange} />
+            <DetailRow label="Recipe / Steps" value={entry.recipe} />
+          </>
+        )}
+        <div style={{height:32}} />
+      </div>
+    </div>
+  );
+}
+
+// ── Bean Detail ───────────────────────────────────────────────────────────────
+function BeanDetail({ bean, onBack, onEdit }) {
+  return (
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
+      <div style={{ padding:'8px 16px', paddingTop:'calc(8px + env(safe-area-inset-top))',
+        display:'flex', justifyContent:'space-between', alignItems:'center',
+        borderBottom:'0.5px solid rgba(240,228,204,0.15)', background:P.bg, flexShrink:0 }}>
+        <div onClick={onBack} style={{ fontSize:11, color:P.cafe, cursor:'pointer', padding:'4px 0' }}>← Back</div>
+        <div style={{ fontSize:13, fontWeight:500, color:G.text, fontFamily:'Cormorant Garamond, serif' }}>Bean Detail</div>
+        <div onClick={onEdit} style={{ fontSize:11, color:P.cafe, fontWeight:600, cursor:'pointer', padding:'4px 0' }}>Edit</div>
+      </div>
+      <div className="scroll-y" style={{ flex:1, padding:'16px' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:20 }}>
+          <BeanAvatar color={bean.color||'#6B8FA8'} />
+          <div>
+            <div style={{ fontSize:22, fontWeight:500, color:P.headerText, fontFamily:'Cormorant Garamond, serif', lineHeight:1.2 }}>{bean.name}</div>
+            {bean.roaster && <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4 }}>{bean.roaster}</div>}
+          </div>
+        </div>
+        <FormDivider />
+        <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+          <GhostChip label={bean.process||'Washed'} active />
+        </div>
+        {bean.rating>0 && (
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:6, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
+            <RatingSquares n={bean.rating} size={18} />
+          </div>
+        )}
+        <FormDivider />
+        <DetailRow label="Times Brewed" value={`${bean.brews} brew${bean.brews!==1?'s':''}`} />
+        <div style={{ height:32 }} />
+      </div>
+    </div>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 function App() {
-  const [entries, setEntries] = useLS('coffee_entries', []);
-  const [beans,   setBeans]   = useLS('coffee_beans',   []);
-  const [view,    setView]    = useState('home');
-  const [showSheet, setSheet] = useState(false);
-  const [formInit,  setInit]  = useState({});
+  const [entries, setEntries]       = useLS('coffee_entries', []);
+  const [beans,   setBeans]         = useLS('coffee_beans',   []);
+  const [view,    setView]          = useState('home');
+  const [showSheet, setSheet]       = useState(false);
+  const [formInit,  setInit]        = useState({});
+  const [selectedEntry, setSelEntry]= useState(null);
+  const [selectedBean,  setSelBean] = useState(null);
 
-  const goTab = t => {
-    setSheet(false);
-    setView(['home','beans',null,'stats','profile'][t]);
+  const goTab = t => { setSheet(false); setView(['home','beans',null,'stats','profile'][t]); };
+
+  const saveEntry = entry => { setEntries([entry,...entries]); setSheet(false); setView('home'); };
+
+  const updateEntry = entry => {
+    setEntries(prev => prev.map(e => e.id===entry.id ? entry : e));
+    setSelEntry(entry);
+    setView('entry-detail');
   };
 
-  const saveEntry = entry => {
-    setEntries([entry, ...entries]);
-    setSheet(false);
-    setView('home');
+  const updateBean = bean => {
+    setBeans(prev => prev.map(b => b.id===bean.id ? bean : b));
+    setSelBean(bean);
+    setView('bean-detail');
   };
 
-  const expand = (type, partial) => {
-    setInit(partial);
-    setSheet(false);
-    setView(type==='cafe' ? 'cafe-form' : 'brew-form');
-  };
+  const expand = (type, partial) => { setInit(partial); setSheet(false); setView(type==='cafe'?'cafe-form':'brew-form'); };
 
   const sp = { onTab:goTab, onAdd:()=>setSheet(true) };
 
   return (
     <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background:P.bg }}>
-      {view==='home'      && <HomeScreen    entries={entries} {...sp} />}
-      {view==='beans'     && <BeanLibrary   beans={beans}    {...sp} onAddBean={()=>setView('add-bean')} />}
-      {view==='stats'     && <StatsDash     entries={entries} {...sp} />}
-      {view==='profile'   && <ProfileScreen entries={entries} beans={beans} {...sp} />}
-      {view==='cafe-form' && <CafeForm  initial={formInit} onBack={()=>setView('home')} onSave={saveEntry} />}
-      {view==='brew-form' && <BrewForm  initial={formInit} onBack={()=>setView('home')} onSave={saveEntry} />}
-      {view==='add-bean'  && <AddBeanForm onBack={()=>setView('beans')}
-        onSave={b=>{ setBeans([b,...beans]); setView('beans'); }} />}
+      {view==='home'         && <HomeScreen    entries={entries} {...sp} onEntryPress={e=>{ setSelEntry(e); setView('entry-detail'); }} />}
+      {view==='beans'        && <BeanLibrary   beans={beans} {...sp} onAddBean={()=>setView('add-bean')} onBeanPress={b=>{ setSelBean(b); setView('bean-detail'); }} />}
+      {view==='stats'        && <StatsDash     entries={entries} {...sp} />}
+      {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} />}
+      {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} />}
+      {view==='bean-detail'  && selectedBean  && <BeanDetail  bean={selectedBean}  onBack={()=>setView('beans')} onEdit={()=>{ setInit(selectedBean); setView('bean-form-edit'); }} />}
+      {view==='cafe-form'    && <CafeForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry} />}
+      {view==='brew-form'    && <BrewForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   beans={beans} />}
+      {view==='cafe-form-edit'&& <CafeForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} />}
+      {view==='brew-form-edit'&& <BrewForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} beans={beans} />}
+      {view==='add-bean'     && <AddBeanForm onBack={()=>setView('beans')} onSave={b=>{ setBeans([b,...beans]); setView('beans'); }} />}
+      {view==='bean-form-edit'&& <AddBeanForm initial={formInit} onBack={()=>setView('bean-detail')} onUpdate={updateBean} />}
       {showSheet && <QuickCaptureSheet onClose={()=>setSheet(false)} onSave={saveEntry} onExpand={expand} />}
     </div>
   );
