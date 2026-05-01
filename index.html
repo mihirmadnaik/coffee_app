@@ -240,9 +240,10 @@ function TabBar({ active, onTab, onAdd }) {
   );
 }
 
-function MiniCalendar({ entries, onClose }) {
+function MiniCalendar({ entries, onClose, onDaySelect, selectedDay }) {
   const now = new Date();
   const yr = now.getFullYear(), mo = now.getMonth();
+  const pad = n => String(n).padStart(2,'0');
   const loggedDays = new Set(
     entries.filter(e => { const d=new Date(e.date); return d.getMonth()===mo && d.getFullYear()===yr; })
            .map(e => new Date(e.date).getDate())
@@ -255,6 +256,7 @@ function MiniCalendar({ entries, onClose }) {
   while (cells.length%7) cells.push(null);
   const weeks = Array.from({length:cells.length/7},(_,i)=>cells.slice(i*7,i*7+7));
   const monthLabel = now.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const selDate = selectedDay ? new Date(selectedDay+'T12:00:00').getDate() : null;
   return (
     <div style={{ background:P.cardBg2, border:'0.5px solid '+P.cardStroke,
       borderRadius:14, padding:'10px 12px', marginBottom:8 }}>
@@ -269,18 +271,29 @@ function MiniCalendar({ entries, onClose }) {
       </div>
       {weeks.map((week,wi)=>(
         <div key={wi} style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:1, marginBottom:1 }}>
-          {week.map((d,di)=>(
-            <div key={di} style={{ height:22, display:'flex', alignItems:'center', justifyContent:'center' }}>
-              {d && (
-                <div style={{ width:20, height:20, borderRadius:'50%',
-                  background: d===today ? P.cafe : loggedDays.has(d) ? P.brew+'40' : 'transparent',
-                  display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <span style={{ fontSize:8, color: d===today?'#fff':P.cardDark,
-                    fontWeight: loggedDays.has(d)?600:400 }}>{d}</span>
-                </div>
-              )}
-            </div>
-          ))}
+          {week.map((d,di)=>{
+            const dayKey = d ? `${yr}-${pad(mo+1)}-${pad(d)}` : null;
+            const isSelected = d && selDate===d;
+            const isToday = d===today;
+            const hasEntry = d && loggedDays.has(d);
+            return (
+              <div key={di} onClick={()=> d && onDaySelect && onDaySelect(dayKey)}
+                style={{ height:26, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', cursor: d?'pointer':'default' }}>
+                {d && (
+                  <>
+                    <div style={{ width:20, height:20, borderRadius:'50%',
+                      background: isSelected ? P.cafe : isToday ? P.cafe+'55' : 'transparent',
+                      display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <span style={{ fontSize:8, color: isSelected?'#fff':P.cardDark,
+                        fontWeight: hasEntry?600:400 }}>{d}</span>
+                    </div>
+                    <div style={{ width:4, height:4, borderRadius:'50%', marginTop:1,
+                      background: hasEntry ? P.brew : 'transparent' }} />
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       ))}
     </div>
@@ -290,7 +303,10 @@ function MiniCalendar({ entries, onClose }) {
 // ── Home Screen ───────────────────────────────────────────────────────────────
 function HomeScreen({ entries, onTab, onAdd, onEntryPress }) {
   const [calOpen, setCalOpen] = useState(false);
-  const groups = groupByDate(entries);
+  const [filterDay, setFilterDay] = useState(null);
+  const handleDaySelect = day => { setFilterDay(day); setCalOpen(false); };
+  const displayEntries = filterDay ? entries.filter(e=>e.date.startsWith(filterDay)) : entries;
+  const groups = groupByDate(displayEntries);
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
       <div style={{ padding:'10px 16px 12px', background:P.bg,
@@ -327,7 +343,17 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress }) {
       </div>
 
       <div className="scroll-y" style={{ flex:1, padding:'0 14px' }}>
-        {calOpen && <MiniCalendar entries={entries} onClose={()=>setCalOpen(false)} />}
+        {calOpen && <MiniCalendar entries={entries} onClose={()=>setCalOpen(false)}
+          onDaySelect={handleDaySelect} selectedDay={filterDay} />}
+
+        {filterDay && !calOpen && (
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0 10px' }}>
+            <span style={{ fontSize:10, color:P.cafe, fontFamily:'DM Mono, monospace', fontWeight:400 }}>
+              {new Date(filterDay+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}
+            </span>
+            <span onClick={()=>setFilterDay(null)} style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', cursor:'pointer' }}>clear ×</span>
+          </div>
+        )}
 
         {!calOpen && groups.length===0 && (
           <div style={{ textAlign:'center', padding:'60px 20px',
