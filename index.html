@@ -159,6 +159,36 @@ function GhostChip({ label, active, onPress }) {
   );
 }
 
+function ChipAdder({ label, presets, custom=[], onCustomChange, selected=[], onToggle }) {
+  const [adding, setAdding] = useState(false);
+  const [inp, setInp] = useState('');
+  const all = [...presets, ...custom];
+  const commit = () => {
+    const v = inp.trim();
+    if (v && !all.some(n=>n.toLowerCase()===v.toLowerCase())) onCustomChange([...custom, v]);
+    setInp(''); setAdding(false);
+  };
+  return (
+    <div style={{ marginBottom:14 }}>
+      <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>{label}</div>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+        {all.map(n=><GhostChip key={n} label={n} active={selected.includes(n)} onPress={()=>onToggle(n)} />)}
+        {adding
+          ? <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+              <input autoFocus value={inp} onChange={e=>setInp(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter') commit(); if(e.key==='Escape'){setInp('');setAdding(false);} }}
+                style={{ fontSize:10, color:G.text, background:G.surface, border:'1px solid '+P.cafe,
+                  borderRadius:20, padding:'4px 10px', width:90, fontFamily:'DM Mono, monospace', fontWeight:300 }} />
+              <span onClick={commit} style={{ fontSize:11, color:P.cafe, cursor:'pointer', fontFamily:'DM Mono, monospace' }}>✓</span>
+              <span onClick={()=>{setInp('');setAdding(false);}} style={{ fontSize:11, color:G.label, cursor:'pointer', fontFamily:'DM Mono, monospace' }}>✕</span>
+            </div>
+          : <GhostChip label="+ add" onPress={()=>setAdding(true)} />
+        }
+      </div>
+    </div>
+  );
+}
+
 function GhostField({ label, placeholder, value, onChange, multiline, height=42 }) {
   return (
     <div style={{ marginBottom:12 }}>
@@ -411,6 +441,7 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress }) {
 
 // ── Quick Capture Sheet ───────────────────────────────────────────────────────
 const TASTING_NOTES = ['Fruity','Floral','Nutty','Chocolatey','Bright','Smoky','Sweet','Clean'];
+const DRINK_TYPES   = ['Espresso','Flat White','Latte','Cappuccino','Cortado','Filter','Cold Brew','Batch Brew'];
 const BREW_METHODS  = ['V60','Espresso','Chemex','Aeropress','French Press','Moka Pot'];
 const VIBE_TAGS     = ['Cozy','Busy','Quiet','Specialty','Work-friendly'];
 
@@ -499,7 +530,7 @@ function QuickCaptureSheet({ onClose, onSave, onExpand }) {
 }
 
 // ── Café Full Form ────────────────────────────────────────────────────────────
-function CafeForm({ initial={}, onBack, onSave, onUpdate }) {
+function CafeForm({ initial={}, onBack, onSave, onUpdate, customNotes=[], onAddNote=()=>{}, customDrinks=[], onAddDrink=()=>{} }) {
   const defaults = { cafeName:'', location:'', drinkType:'', bean:'', price:'',
     tastingNotes:[], ratings:{overall:0,aroma:0,taste:0,texture:0},
     vibeTags:[], wouldVisitAgain:false, notes:'' };
@@ -528,18 +559,15 @@ function CafeForm({ initial={}, onBack, onSave, onUpdate }) {
         <FormDivider />
         <SectionHead label="The Coffee" />
         <div style={{ height:8 }} />
-        <GhostField label="Drink Type" placeholder="Flat White, Espresso…" value={f.drinkType} onChange={v=>set('drinkType',v)} />
+        <ChipAdder label="Drink Type" presets={DRINK_TYPES} custom={customDrinks} onCustomChange={onAddDrink}
+          selected={f.drinkType?[f.drinkType]:[]} onToggle={v=>set('drinkType', f.drinkType===v?'':v)} />
         <GhostField label="Bean / Roaster" placeholder="Ethiopia, Colombia…" value={f.bean} onChange={v=>set('bean',v)} />
         <GhostField label="Price" placeholder="$0.00" value={f.price} onChange={v=>set('price',v)} />
         <FormDivider />
         <SectionHead label="Tasting" />
         <div style={{ height:8 }} />
-        <div style={{ marginBottom:14 }}>
-          <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Notes</div>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
-            {TASTING_NOTES.map(n=><GhostChip key={n} label={n} active={f.tastingNotes.includes(n)} onPress={()=>toggleArr('tastingNotes',n)} />)}
-          </div>
-        </div>
+        <ChipAdder label="Notes" presets={TASTING_NOTES} custom={customNotes} onCustomChange={onAddNote}
+          selected={f.tastingNotes} onToggle={n=>toggleArr('tastingNotes',n)} />
         <div style={{ marginBottom:14 }}>
           <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
           {['Overall','Aroma','Taste','Texture'].map(r=>(
@@ -573,7 +601,7 @@ function CafeForm({ initial={}, onBack, onSave, onUpdate }) {
 }
 
 // ── Brew Full Form ────────────────────────────────────────────────────────────
-function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[] }) {
+function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], customNotes=[], onAddNote=()=>{} }) {
   const defaults = { beanName:'', roaster:'', method:'V60', dose:'', water:'',
     temp:'', brewTime:'', grindSize:'', ratio:'', tastingNotes:[], rating:0, whatIdChange:'', recipe:'' };
   const [f, setF] = useState({ ...defaults, ...initial });
@@ -599,7 +627,8 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[] }) {
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
       <NavBar title="Home Brew" onBack={handleBack} onSave={handleSave} />
       <div className="scroll-y" style={{ flex:1, padding:'14px 16px' }}>
-        <BeanPicker beans={beans} value={f.beanName} onChange={v=>set('beanName',v)} />
+        <BeanPicker beans={beans} value={f.beanName} onChange={v=>set('beanName',v)}
+          onBeanSelect={b=>setF(p=>({ ...p, beanName:b.name, roaster:b.roaster||p.roaster }))} />
         <GhostField label="Roaster" placeholder="Counter Culture, Intelligentsia…" value={f.roaster} onChange={v=>set('roaster',v)} />
         <div style={{ marginBottom:14 }}>
           <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Brew Method</div>
@@ -623,12 +652,8 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[] }) {
         <FormDivider />
         <SectionHead label="Tasting" />
         <div style={{ height:8 }} />
-        <div style={{ marginBottom:14 }}>
-          <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Notes</div>
-          <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
-            {TASTING_NOTES.map(n=><GhostChip key={n} label={n} active={f.tastingNotes.includes(n)} onPress={()=>toggleNote(n)} />)}
-          </div>
-        </div>
+        <ChipAdder label="Notes" presets={TASTING_NOTES} custom={customNotes} onCustomChange={onAddNote}
+          selected={f.tastingNotes} onToggle={toggleNote} />
         <div style={{ marginBottom:16 }}>
           <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
           <RatingSquares n={f.rating} size={20} onChange={v=>set('rating',v)} />
@@ -778,6 +803,17 @@ function StatsDash({ entries, onTab, onAdd }) {
   const topMethods = Object.entries(methodMap).sort((a,b)=>b[1]-a[1]).slice(0,3)
     .map(([m,c])=>({ m, p:Math.round((c/(brews.length||1))*100) }));
 
+  const noteMap = {};
+  entries.forEach(e=>{
+    const r = e.rating||(e.ratings?.overall)||0;
+    if (!r || !e.tastingNotes?.length) return;
+    e.tastingNotes.forEach(n=>{ if(!noteMap[n]) noteMap[n]={sum:0,cnt:0}; noteMap[n].sum+=r; noteMap[n].cnt++; });
+  });
+  const noteAvgs = Object.entries(noteMap).filter(([,s])=>s.cnt>=2)
+    .map(([n,s])=>({ n, avg:s.sum/s.cnt })).sort((a,b)=>b.avg-a.avg);
+  const enjoyNotes  = noteAvgs.filter(x=>x.avg>=4).map(x=>x.n);
+  const dislikeNotes= noteAvgs.filter(x=>x.avg<=2).map(x=>x.n);
+
   const stats = [
     { l:'Total Coffees', v:String(subset.length), s:period==='month'?'this month':'all time' },
     { l:'Avg Rating',    v:avg,                    s:'out of 5' },
@@ -845,6 +881,27 @@ function StatsDash({ entries, onTab, onAdd }) {
             ))}
           </div>
         )}
+        {(enjoyNotes.length>0||dislikeNotes.length>0) && (
+          <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 13px', marginBottom:8 }}>
+            <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>Taste Profile</div>
+            {enjoyNotes.length>0 && (
+              <div style={{ marginBottom:dislikeNotes.length>0?10:0 }}>
+                <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginBottom:6 }}>You tend to enjoy</div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
+                  {enjoyNotes.map(n=><GhostChip key={n} label={n} active />)}
+                </div>
+              </div>
+            )}
+            {dislikeNotes.length>0 && (
+              <div>
+                <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginBottom:6 }}>You tend to dislike</div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
+                  {dislikeNotes.map(n=><GhostChip key={n} label={n} />)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <div style={{ height:16 }} />
       </div>
       <TabBar active={3} onTab={onTab} onAdd={onAdd} />
@@ -902,7 +959,7 @@ function DetailRow({ label, value }) {
   );
 }
 
-function BeanPicker({ beans=[], value='', onChange }) {
+function BeanPicker({ beans=[], value='', onChange, onBeanSelect }) {
   const [open, setOpen] = useState(false);
   const [customMode, setCustomMode] = useState(beans.length===0 || (!!value && !beans.some(b=>b.name===value)));
   if (customMode || beans.length===0) return (
@@ -939,7 +996,7 @@ function BeanPicker({ beans=[], value='', onChange }) {
         <div style={{ background:G.surface, border:'1px solid '+P.cafe,
           borderTop:'none', borderRadius:'0 0 10px 10px', overflow:'hidden' }}>
           {beans.map(b=>(
-            <div key={b.id} onClick={()=>{ onChange(b.name); setOpen(false); }}
+            <div key={b.id} onClick={()=>{ onChange(b.name); onBeanSelect&&onBeanSelect(b); setOpen(false); }}
               style={{ padding:'10px 14px', borderBottom:'0.5px solid '+G.border,
                 cursor:'pointer', background:b.name===value?'rgba(212,151,106,0.12)':'transparent',
                 display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -1082,8 +1139,10 @@ function BeanDetail({ bean, onBack, onEdit }) {
 
 // ── App ───────────────────────────────────────────────────────────────────────
 function App() {
-  const [entries, setEntries]       = useLS('coffee_entries', []);
-  const [beans,   setBeans]         = useLS('coffee_beans',   []);
+  const [entries,     setEntries]     = useLS('coffee_entries',  []);
+  const [beans,       setBeans]       = useLS('coffee_beans',    []);
+  const [customNotes, setCustomNotes] = useLS('custom_notes',    []);
+  const [customDrinks,setCustomDrinks]= useLS('custom_drinks',   []);
   const [view,    setView]          = useState('home');
   const [showSheet, setSheet]       = useState(false);
   const [formInit,  setInit]        = useState({});
@@ -1118,10 +1177,10 @@ function App() {
       {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} />}
       {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} />}
       {view==='bean-detail'  && selectedBean  && <BeanDetail  bean={selectedBean}  onBack={()=>setView('beans')} onEdit={()=>{ setInit(selectedBean); setView('bean-form-edit'); }} />}
-      {view==='cafe-form'    && <CafeForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry} />}
-      {view==='brew-form'    && <BrewForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   beans={beans} />}
-      {view==='cafe-form-edit'&& <CafeForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} />}
-      {view==='brew-form-edit'&& <BrewForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} beans={beans} />}
+      {view==='cafe-form'    && <CafeForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   customNotes={customNotes} onAddNote={setCustomNotes} customDrinks={customDrinks} onAddDrink={setCustomDrinks} />}
+      {view==='brew-form'    && <BrewForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   beans={beans} customNotes={customNotes} onAddNote={setCustomNotes} />}
+      {view==='cafe-form-edit'&& <CafeForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} customNotes={customNotes} onAddNote={setCustomNotes} customDrinks={customDrinks} onAddDrink={setCustomDrinks} />}
+      {view==='brew-form-edit'&& <BrewForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} beans={beans} customNotes={customNotes} onAddNote={setCustomNotes} />}
       {view==='add-bean'     && <AddBeanForm onBack={()=>setView('beans')} onSave={b=>{ setBeans([b,...beans]); setView('beans'); }} />}
       {view==='bean-form-edit'&& <AddBeanForm initial={formInit} onBack={()=>setView('bean-detail')} onUpdate={updateBean} />}
       {showSheet && <QuickCaptureSheet onClose={()=>setSheet(false)} onSave={saveEntry} onExpand={expand} />}
