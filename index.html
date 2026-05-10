@@ -44,7 +44,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useCallback, useRef } = React;
+const { useState, useEffect, useCallback, useRef } = React;
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 const P = {
@@ -103,6 +103,48 @@ function getMonthCount(entries) {
     const d = new Date(e.date);
     return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
   }).length;
+}
+
+// ── Geo / map utilities ───────────────────────────────────────────────────────
+function haversineM(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const f1 = lat1*Math.PI/180, f2 = lat2*Math.PI/180;
+  const df = (lat2-lat1)*Math.PI/180, dl = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(df/2)**2 + Math.cos(f1)*Math.cos(f2)*Math.sin(dl/2)**2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+}
+
+function loadLeaflet() {
+  return new Promise(resolve => {
+    if (window.L) { resolve(); return; }
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const style = document.createElement('style');
+    style.textContent = [
+      '.leaflet-container{background:#0F1C29}',
+      '.leaflet-control-attribution{background:rgba(15,28,41,0.85)!important;color:#7A94A8!important;font-size:7px!important;padding:2px 6px!important;border-radius:4px 0 0 0!important}',
+      '.leaflet-control-attribution a{color:#D4976A!important}',
+    ].join('');
+    document.head.appendChild(style);
+    const js = document.createElement('script');
+    js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    js.onload = resolve;
+    document.head.appendChild(js);
+  });
+}
+
+async function fetchNearbyCafes(lat, lon) {
+  const q = `[out:json][timeout:10];(node["amenity"="cafe"](around:800,${lat},${lon});node["amenity"="coffee_shop"](around:800,${lat},${lon}););out body 30;`;
+  try {
+    const r = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST', body: 'data=' + encodeURIComponent(q),
+      signal: AbortSignal.timeout(12000)
+    });
+    if (!r.ok) return [];
+    return (await r.json()).elements || [];
+  } catch { return []; }
 }
 
 // ── localStorage hook ─────────────────────────────────────────────────────────
@@ -330,10 +372,219 @@ function MiniCalendar({ entries, onClose, onDaySelect, selectedDay }) {
   );
 }
 
+// ── Map View ─────────────────────────────────────────────────────────────────
+function MapView({ entries, onLogCafe }) {
+  const containerRef  = useRef(null);
+  const mapRef        = useRef(null);
+  const nearbyLgRef   = useRef(null);
+  const visitedLgRef  = useRef(null);
+  const userPosRef    = useRef(null);
+  const timerRef      = useRef(null);
+
+  const [layer,   setLayer]   = useState('nearby');
+  const [loading, setLoading] = useState(true);
+  const [sel,     setSel]     = useState(null);
+  const [geoErr,  setGeoErr]  = useState(false);
+
+  const cafesWithCoords = entries.filter(e => e.type==='cafe' && e.lat && e.lon);
+
+  const makeNearbyMarker = useCallback(node => {
+    if (!node.tags?.name) return null;
+    const m = L.circleMarker([node.lat, node.lon], {
+      radius:7, fillColor:P.cafe, fillOpacity:0.85, color:P.bg, weight:2
+    });
+    m.on('click', () => setSel({
+      kind:'nearby', name:node.tags.name,
+      sub:[node.tags['addr:street'], node.tags['addr:suburb']||node.tags['addr:city']].filter(Boolean).join(', '),
+      lat:node.lat, lon:node.lon
+    }));
+    return m;
+  }, []);
+
+  const makeVisitedMarker = useCallback(entry => {
+    const m = L.circleMarker([entry.lat, entry.lon], {
+      radius:8, fillColor:P.cafe, fillOpacity:1, color:'#fff', weight:2.5
+    });
+    m.on('click', () => setSel({
+      kind:'visited', name:entry.cafeName||'Unknown Café',
+      sub:entry.location||'', lat:entry.lat, lon:entry.lon, entry
+    }));
+    return m;
+  }, []);
+
+  const refreshNearby = useCallback(async (lat, lon) => {
+    setLoading(true);
+    const nodes = await fetchNearbyCafes(lat, lon);
+    if (!nearbyLgRef.current) return;
+    nearbyLgRef.current.clearLayers();
+    nodes.forEach(n => { const m = makeNearbyMarker(n); if (m) m.addTo(nearbyLgRef.current); });
+    setLoading(false);
+  }, [makeNearbyMarker]);
+
+  const refreshVisited = useCallback(() => {
+    if (!visitedLgRef.current) return;
+    visitedLgRef.current.clearLayers();
+    cafesWithCoords.forEach(e => makeVisitedMarker(e).addTo(visitedLgRef.current));
+  }, [cafesWithCoords, makeVisitedMarker]);
+
+  // Init Leaflet map once on mount
+  useEffect(() => {
+    let live = true;
+    loadLeaflet().then(() => {
+      if (!live || !containerRef.current || mapRef.current) return;
+      const map = L.map(containerRef.current, { zoomControl:false });
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution:'© <a href="https://openstreetmap.org">OSM</a> © <a href="https://carto.com">CARTO</a>',
+        maxZoom:19
+      }).addTo(map);
+      mapRef.current     = map;
+      nearbyLgRef.current  = L.layerGroup().addTo(map);
+      visitedLgRef.current = L.layerGroup();
+
+      navigator.geolocation.getCurrentPosition(
+        ({ coords:{ latitude:lat, longitude:lon } }) => {
+          if (!live) return;
+          userPosRef.current = [lat, lon];
+          map.setView([lat, lon], 16);
+          L.circleMarker([lat, lon], {
+            radius:8, fillColor:P.brew, fillOpacity:1, color:'#fff', weight:2.5
+          }).addTo(map);
+          refreshNearby(lat, lon);
+        },
+        () => { if (live) { setGeoErr(true); setLoading(false); } },
+        { timeout:8000 }
+      );
+
+      map.on('moveend', () => {
+        clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => {
+          const c = map.getCenter();
+          refreshNearby(c.lat, c.lng);
+        }, 700);
+      });
+    });
+    return () => {
+      live = false;
+      clearTimeout(timerRef.current);
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+    };
+  }, []);
+
+  // Swap layers when toggle changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    setSel(null);
+    if (layer === 'nearby') {
+      if (visitedLgRef.current) mapRef.current.removeLayer(visitedLgRef.current);
+      if (nearbyLgRef.current)  nearbyLgRef.current.addTo(mapRef.current);
+      const c = mapRef.current.getCenter();
+      refreshNearby(c.lat, c.lng);
+    } else {
+      if (nearbyLgRef.current) mapRef.current.removeLayer(nearbyLgRef.current);
+      refreshVisited();
+      if (visitedLgRef.current) visitedLgRef.current.addTo(mapRef.current);
+      setLoading(false);
+    }
+  }, [layer]);
+
+  const dist = sel && userPosRef.current
+    ? haversineM(userPosRef.current[0], userPosRef.current[1], sel.lat, sel.lon) : null;
+  const distStr = dist == null ? null : dist < 1000 ? `${dist}m away` : `${(dist/1000).toFixed(1)}km away`;
+
+  return (
+    <div style={{ flex:1, position:'relative', overflow:'hidden' }}>
+      {/* Nearby / Visited toggle */}
+      <div style={{ position:'absolute', top:10, left:'50%', transform:'translateX(-50%)',
+        zIndex:1000, display:'flex', background:'rgba(24,38,53,0.92)',
+        border:'0.5px solid '+P.cardStroke, borderRadius:20, padding:3, gap:2 }}>
+        {[['nearby','Nearby'],['visited','Visited']].map(([v,l])=>(
+          <div key={v} onClick={()=>setLayer(v)}
+            style={{ padding:'4px 16px', borderRadius:16, fontSize:9, cursor:'pointer',
+              fontFamily:'DM Mono, monospace', transition:'all 0.15s',
+              background: layer===v ? P.cafe : 'transparent',
+              color: layer===v ? '#f0e4cc' : P.headerMuted }}>{l}</div>
+        ))}
+      </div>
+
+      {/* Loading pill */}
+      {loading && (
+        <div style={{ position:'absolute', top:46, left:'50%', transform:'translateX(-50%)',
+          zIndex:1000, background:'rgba(24,38,53,0.85)', padding:'3px 10px',
+          borderRadius:10, fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>
+          loading…
+        </div>
+      )}
+
+      {/* Geo permission error */}
+      {geoErr && (
+        <div style={{ position:'absolute', inset:0, zIndex:400, display:'flex',
+          alignItems:'center', justifyContent:'center', background:P.bg }}>
+          <div style={{ textAlign:'center', padding:'0 40px' }}>
+            <div style={{ fontSize:32, marginBottom:12 }}>📍</div>
+            <div style={{ fontSize:11, color:P.headerMuted, fontFamily:'DM Mono, monospace', lineHeight:1.6 }}>
+              Location access needed<br/>to find nearby cafés.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Map tile container */}
+      <div ref={containerRef} style={{ width:'100%', height:'100%' }} />
+
+      {/* Visited empty state */}
+      {layer==='visited' && cafesWithCoords.length===0 && !geoErr && (
+        <div style={{ position:'absolute', bottom:16, left:16, right:16, zIndex:500,
+          background:'rgba(24,38,53,0.92)', border:'0.5px solid '+P.cardStroke,
+          borderRadius:14, padding:'14px 16px', textAlign:'center' }}>
+          <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace',
+            fontWeight:300, lineHeight:1.7 }}>
+            Cafés logged via location search<br/>will appear here.
+          </div>
+        </div>
+      )}
+
+      {/* Selected marker card */}
+      {sel && (
+        <div style={{ position:'absolute', bottom:0, left:0, right:0, zIndex:1000,
+          background:'rgba(24,38,53,0.97)', borderTop:'0.5px solid '+P.cardStroke,
+          borderRadius:'16px 16px 0 0', padding:'16px 16px 28px' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+            <div style={{ flex:1, paddingRight:10 }}>
+              <div style={{ fontSize:18, fontWeight:500, color:P.headerText,
+                fontFamily:'Cormorant Garamond, serif', lineHeight:1.2 }}>{sel.name}</div>
+              {sel.sub && <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace',
+                fontWeight:300, marginTop:3 }}>{sel.sub}</div>}
+              {distStr && <div style={{ fontSize:9, color:P.cafe, fontFamily:'DM Mono, monospace',
+                marginTop:4 }}>{distStr}</div>}
+            </div>
+            <span onClick={()=>setSel(null)} style={{ fontSize:22, color:P.headerMuted,
+              cursor:'pointer', lineHeight:1 }}>×</span>
+          </div>
+          {sel.kind==='nearby' && (
+            <div onClick={()=>{ onLogCafe&&onLogCafe({ cafeName:sel.name, location:sel.sub }); setSel(null); }}
+              style={{ background:P.cafe, borderRadius:10, padding:'11px',
+                textAlign:'center', cursor:'pointer',
+                boxShadow:'0 3px 10px rgba(212,151,106,0.3)' }}>
+              <span style={{ fontSize:11, color:'#182635', fontFamily:'DM Mono, monospace',
+                letterSpacing:'0.04em' }}>log a visit →</span>
+            </div>
+          )}
+          {sel.kind==='visited' && sel.entry && (
+            <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>
+              visited · {new Date(sel.entry.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Home Screen ───────────────────────────────────────────────────────────────
-function HomeScreen({ entries, onTab, onAdd, onEntryPress }) {
+function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe }) {
   const [calOpen, setCalOpen] = useState(false);
   const [filterDay, setFilterDay] = useState(null);
+  const [mapMode, setMapMode] = useState(false);
   const handleDaySelect = day => { setFilterDay(day); setCalOpen(false); };
   const displayEntries = filterDay ? entries.filter(e=>e.date.startsWith(filterDay)) : entries;
   const groups = groupByDate(displayEntries);
@@ -352,87 +603,108 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress }) {
             {getMonthCount(entries)} coffee{getMonthCount(entries)!==1?'s':''} this month
           </div>
         </div>
-        <div onClick={() => setCalOpen(o=>!o)} style={{ paddingTop:4, cursor:'pointer' }}>
-          <div style={{ width:28, height:28,
-            border:'1.5px solid '+(calOpen?P.cafe:P.headerMuted),
-            borderRadius:5, display:'flex', flexDirection:'column', overflow:'hidden' }}>
-            <div style={{ height:8, background:calOpen?P.cafe:P.headerMuted,
-              display:'flex', alignItems:'center', justifyContent:'space-around', padding:'0 3px' }}>
-              <div style={{ width:2, height:5, background:P.bg+'cc', borderRadius:1, marginTop:-2 }} />
-              <div style={{ width:2, height:5, background:P.bg+'cc', borderRadius:1, marginTop:-2 }} />
-            </div>
-            <div style={{ flex:1, display:'grid', gridTemplateColumns:'repeat(3,1fr)',
-              gap:1.5, padding:'2px 3px' }}>
-              {Array(6).fill(0).map((_,i)=>(
-                <div key={i} style={{ height:3, borderRadius:0.5,
-                  background:(calOpen?P.cafe:P.headerMuted)+(i===5?'':'40') }} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="scroll-y" style={{ flex:1, padding:'0 14px' }}>
-        {calOpen && <MiniCalendar entries={entries} onClose={()=>setCalOpen(false)}
-          onDaySelect={handleDaySelect} selectedDay={filterDay} />}
-
-        {filterDay && !calOpen && (
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0 10px' }}>
-            <span style={{ fontSize:10, color:P.cafe, fontFamily:'DM Mono, monospace', fontWeight:400 }}>
-              {new Date(filterDay+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}
-            </span>
-            <span onClick={()=>setFilterDay(null)} style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', cursor:'pointer' }}>clear ×</span>
-          </div>
-        )}
-
-        {!calOpen && groups.length===0 && (
-          <div style={{ textAlign:'center', padding:'60px 20px',
-            color:P.headerMuted, fontFamily:'DM Mono, monospace', fontSize:12, fontWeight:300 }}>
-            <div style={{ fontSize:36, marginBottom:14 }}>☕</div>
-            <div>No entries yet.</div>
-            <div style={{ marginTop:6, fontSize:10 }}>Tap + to log your first coffee.</div>
-          </div>
-        )}
-
-        {!calOpen && groups.map((g,gi)=>(
-          <div key={gi}>
-            <div style={{ display:'flex', alignItems:'center', gap:7, padding:'10px 0 6px' }}>
-              <span style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace',
-                letterSpacing:'0.1em', flexShrink:0 }}>{g.label.toUpperCase()}</span>
-              <div style={{ flex:1, height:'0.5px', background:P.darkStroke }} />
-            </div>
-            {g.entries.map((e,ei)=>(
-              <div key={ei} onClick={()=>onEntryPress&&onEntryPress(e)}
-                style={{ display:'flex', alignItems:'center',
-                marginBottom:6, background:P.cardBg, cursor:'pointer',
-                border:'0.5px solid '+P.cardStroke, borderRadius:10, overflow:'hidden' }}>
-                <div style={{ width:4, alignSelf:'stretch', flexShrink:0,
-                  background: e.type==='cafe' ? P.cafe : P.brew }} />
-                <div style={{ flex:1, padding:'10px 12px', display:'flex', alignItems:'center', gap:8 }}>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:14, fontWeight:500, color:P.headerText,
-                      fontFamily:'Cormorant Garamond, serif', letterSpacing:'0.01em' }}>
-                      {e.type==='cafe' ? (e.cafeName||'Unnamed Café') : (e.beanName||'Unnamed Brew')}
-                    </div>
-                    <div style={{ fontSize:8.5, color:P.headerMuted,
-                      fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:2 }}>
-                      {formatTime(e.date)}
-                    </div>
-                  </div>
-                  <div style={{ flexShrink:0, textAlign:'right' }}>
-                    <span style={{ fontSize:9, fontFamily:'DM Mono, monospace',
-                      color: e.type==='cafe' ? P.cafe : P.brew }}>
-                      {e.type==='cafe' ? (e.drinkType||'Café') : (e.method||'Brew')}
-                    </span>
-                    {e.rating>0 && <div style={{ marginTop:3 }}><RatingDots n={e.rating} /></div>}
-                  </div>
-                </div>
+        <div style={{ display:'flex', alignItems:'center', gap:8, paddingTop:4 }}>
+          <div style={{ display:'flex', background:P.cardBg, border:'0.5px solid '+P.cardStroke,
+            borderRadius:20, padding:2 }}>
+            {['Feed','Map'].map(m=>(
+              <div key={m} onClick={()=>{ setMapMode(m==='Map'); setCalOpen(false); }}
+                style={{ padding:'4px 12px', borderRadius:16, cursor:'pointer',
+                  fontFamily:'DM Mono, monospace', fontSize:9, fontWeight:400,
+                  background: (m==='Map')===mapMode ? P.cafe : 'transparent',
+                  color: (m==='Map')===mapMode ? P.bg : P.headerMuted,
+                  transition:'all 0.15s' }}>
+                {m}
               </div>
             ))}
           </div>
-        ))}
-        <div style={{ height:16 }} />
+          {!mapMode && (
+            <div onClick={() => setCalOpen(o=>!o)} style={{ cursor:'pointer' }}>
+              <div style={{ width:28, height:28,
+                border:'1.5px solid '+(calOpen?P.cafe:P.headerMuted),
+                borderRadius:5, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+                <div style={{ height:8, background:calOpen?P.cafe:P.headerMuted,
+                  display:'flex', alignItems:'center', justifyContent:'space-around', padding:'0 3px' }}>
+                  <div style={{ width:2, height:5, background:P.bg+'cc', borderRadius:1, marginTop:-2 }} />
+                  <div style={{ width:2, height:5, background:P.bg+'cc', borderRadius:1, marginTop:-2 }} />
+                </div>
+                <div style={{ flex:1, display:'grid', gridTemplateColumns:'repeat(3,1fr)',
+                  gap:1.5, padding:'2px 3px' }}>
+                  {Array(6).fill(0).map((_,i)=>(
+                    <div key={i} style={{ height:3, borderRadius:0.5,
+                      background:(calOpen?P.cafe:P.headerMuted)+(i===5?'':'40') }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      {mapMode ? (
+        <MapView entries={entries} onLogCafe={onLogCafe} />
+      ) : (
+        <div className="scroll-y" style={{ flex:1, padding:'0 14px' }}>
+          {calOpen && <MiniCalendar entries={entries} onClose={()=>setCalOpen(false)}
+            onDaySelect={handleDaySelect} selectedDay={filterDay} />}
+
+          {filterDay && !calOpen && (
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0 10px' }}>
+              <span style={{ fontSize:10, color:P.cafe, fontFamily:'DM Mono, monospace', fontWeight:400 }}>
+                {new Date(filterDay+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}
+              </span>
+              <span onClick={()=>setFilterDay(null)} style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', cursor:'pointer' }}>clear ×</span>
+            </div>
+          )}
+
+          {!calOpen && groups.length===0 && (
+            <div style={{ textAlign:'center', padding:'60px 20px',
+              color:P.headerMuted, fontFamily:'DM Mono, monospace', fontSize:12, fontWeight:300 }}>
+              <div style={{ fontSize:36, marginBottom:14 }}>☕</div>
+              <div>No entries yet.</div>
+              <div style={{ marginTop:6, fontSize:10 }}>Tap + to log your first coffee.</div>
+            </div>
+          )}
+
+          {!calOpen && groups.map((g,gi)=>(
+            <div key={gi}>
+              <div style={{ display:'flex', alignItems:'center', gap:7, padding:'10px 0 6px' }}>
+                <span style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace',
+                  letterSpacing:'0.1em', flexShrink:0 }}>{g.label.toUpperCase()}</span>
+                <div style={{ flex:1, height:'0.5px', background:P.darkStroke }} />
+              </div>
+              {g.entries.map((e,ei)=>(
+                <div key={ei} onClick={()=>onEntryPress&&onEntryPress(e)}
+                  style={{ display:'flex', alignItems:'center',
+                  marginBottom:6, background:P.cardBg, cursor:'pointer',
+                  border:'0.5px solid '+P.cardStroke, borderRadius:10, overflow:'hidden' }}>
+                  <div style={{ width:4, alignSelf:'stretch', flexShrink:0,
+                    background: e.type==='cafe' ? P.cafe : P.brew }} />
+                  <div style={{ flex:1, padding:'10px 12px', display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:14, fontWeight:500, color:P.headerText,
+                        fontFamily:'Cormorant Garamond, serif', letterSpacing:'0.01em' }}>
+                        {e.type==='cafe' ? (e.cafeName||'Unnamed Café') : (e.beanName||'Unnamed Brew')}
+                      </div>
+                      <div style={{ fontSize:8.5, color:P.headerMuted,
+                        fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:2 }}>
+                        {formatTime(e.date)}
+                      </div>
+                    </div>
+                    <div style={{ flexShrink:0, textAlign:'right' }}>
+                      <span style={{ fontSize:9, fontFamily:'DM Mono, monospace',
+                        color: e.type==='cafe' ? P.cafe : P.brew }}>
+                        {e.type==='cafe' ? (e.drinkType||'Café') : (e.method||'Brew')}
+                      </span>
+                      {e.rating>0 && <div style={{ marginTop:3 }}><RatingDots n={e.rating} /></div>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+          <div style={{ height:16 }} />
+        </div>
+      )}
 
       <TabBar active={0} onTab={onTab} onAdd={onAdd} />
     </div>
@@ -1171,7 +1443,7 @@ function App() {
 
   return (
     <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background:P.bg }}>
-      {view==='home'         && <HomeScreen    entries={entries} {...sp} onEntryPress={e=>{ setSelEntry(e); setView('entry-detail'); }} />}
+      {view==='home'         && <HomeScreen    entries={entries} {...sp} onEntryPress={e=>{ setSelEntry(e); setView('entry-detail'); }} onLogCafe={p=>{ setInit(p); setView('cafe-form'); }} />}
       {view==='beans'        && <BeanLibrary   beans={beans} {...sp} onAddBean={()=>setView('add-bean')} onBeanPress={b=>{ setSelBean(b); setView('bean-detail'); }} />}
       {view==='stats'        && <StatsDash     entries={entries} {...sp} />}
       {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} />}
