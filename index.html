@@ -124,6 +124,7 @@ function loadLeaflet() {
     const style = document.createElement('style');
     style.textContent = [
       '.leaflet-container{background:#0F1C29}',
+      '.leaflet-tile-pane{filter:hue-rotate(185deg) saturate(0.55) brightness(0.82)}',
       '.leaflet-control-attribution{background:rgba(15,28,41,0.85)!important;color:#7A94A8!important;font-size:7px!important;padding:2px 6px!important;border-radius:4px 0 0 0!important}',
       '.leaflet-control-attribution a{color:#D4976A!important}',
     ].join('');
@@ -136,11 +137,17 @@ function loadLeaflet() {
 }
 
 async function fetchNearbyCafes(lat, lon) {
-  const q = `[out:json][timeout:10];(node["amenity"="cafe"](around:800,${lat},${lon});node["amenity"="coffee_shop"](around:800,${lat},${lon}););out body 30;`;
+  const q = `[out:json][timeout:15];(
+    node["amenity"="cafe"](around:1200,${lat},${lon});
+    node["amenity"="coffee_shop"](around:1200,${lat},${lon});
+    node["shop"="coffee"](around:1200,${lat},${lon});
+    node["amenity"="restaurant"]["cuisine"="coffee_shop"](around:1200,${lat},${lon});
+    node["amenity"="bakery"]["coffee"="yes"](around:1200,${lat},${lon});
+  );out body 60;`;
   try {
     const r = await fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST', body: 'data=' + encodeURIComponent(q),
-      signal: AbortSignal.timeout(12000)
+      signal: AbortSignal.timeout(15000)
     });
     if (!r.ok) return [];
     return (await r.json()).elements || [];
@@ -390,12 +397,16 @@ function MapView({ entries, onLogCafe }) {
 
   const makeNearbyMarker = useCallback(node => {
     if (!node.tags?.name) return null;
+    const t = node.tags;
+    const streetPart = t['addr:housenumber'] && t['addr:street']
+      ? `${t['addr:housenumber']} ${t['addr:street']}` : t['addr:street'];
+    const localityPart = t['addr:suburb'] || t['addr:neighbourhood'] || t['addr:city'] || t['addr:town'];
+    const sub = [streetPart, localityPart].filter(Boolean).join(', ');
     const m = L.circleMarker([node.lat, node.lon], {
       radius:7, fillColor:P.cafe, fillOpacity:0.85, color:P.bg, weight:2
     });
     m.on('click', () => setSel({
-      kind:'nearby', name:node.tags.name,
-      sub:[node.tags['addr:street'], node.tags['addr:suburb']||node.tags['addr:city']].filter(Boolean).join(', '),
+      kind:'nearby', name:t.name, sub,
       lat:node.lat, lon:node.lon
     }));
     return m;
@@ -561,7 +572,7 @@ function MapView({ entries, onLogCafe }) {
               cursor:'pointer', lineHeight:1 }}>×</span>
           </div>
           {sel.kind==='nearby' && (
-            <div onClick={()=>{ onLogCafe&&onLogCafe({ cafeName:sel.name, location:sel.sub }); setSel(null); }}
+            <div onClick={()=>{ onLogCafe&&onLogCafe({ cafeName:sel.name, location:sel.sub, lat:sel.lat, lon:sel.lon }); setSel(null); }}
               style={{ background:P.cafe, borderRadius:10, padding:'11px',
                 textAlign:'center', cursor:'pointer',
                 boxShadow:'0 3px 10px rgba(212,151,106,0.3)' }}>
@@ -813,7 +824,7 @@ function CafeForm({ initial={}, onBack, onSave, onUpdate, customNotes=[], onAddN
   const setRating = (k,v) => setF(p=>({...p, ratings:{...p.ratings,[k]:v}}));
   const hasChanges = JSON.stringify(f) !== initStr.current;
 
-  const buildEntry = () => ({ id:initial.id||genId(), date:initial.date||new Date().toISOString(), type:'cafe', rating:f.ratings.overall, ...f });
+  const buildEntry = () => ({ id:initial.id||genId(), date:initial.date||new Date().toISOString(), type:'cafe', rating:f.ratings.overall, ...f, ...(initial.lat!=null?{lat:initial.lat,lon:initial.lon}:{}) });
   const handleSave = () => { onUpdate ? onUpdate(buildEntry()) : onSave(buildEntry()); };
   const handleBack = () => {
     if (hasChanges) {
