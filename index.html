@@ -105,6 +105,15 @@ function getMonthCount(entries) {
   }).length;
 }
 
+function roastLabel(n) {
+  if (!n || n < 1) return null;
+  return n <= 3 ? 'Light' : n <= 7 ? 'Medium' : 'Dark';
+}
+function roastColor(n) {
+  if (!n || n < 1) return null;
+  return n <= 3 ? '#C8A66A' : n <= 7 ? '#8B5530' : '#3D1A06';
+}
+
 // ── Geo / map utilities ───────────────────────────────────────────────────────
 function haversineM(lat1, lon1, lat2, lon2) {
   const R = 6371000;
@@ -969,8 +978,8 @@ function BeanAvatar({ color }) {
 }
 
 function AddBeanForm({ initial={}, onBack, onSave, onUpdate }) {
-  const [f, setF] = useState({ name:'', roaster:'', process:'Washed', rating:0, ...initial });
-  const initStr = useRef(JSON.stringify({ name:'', roaster:'', process:'Washed', rating:0, ...initial }));
+  const [f, setF] = useState({ name:'', roaster:'', process:'Washed', roastLevel:0, rating:0, ...initial });
+  const initStr = useRef(JSON.stringify({ name:'', roaster:'', process:'Washed', roastLevel:0, rating:0, ...initial }));
   const set = (k,v) => setF(p=>({...p,[k]:v}));
   const hasChanges = JSON.stringify(f) !== initStr.current;
   const handleSave = () => {
@@ -992,6 +1001,34 @@ function AddBeanForm({ initial={}, onBack, onSave, onUpdate }) {
           <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Process</div>
           <div style={{ display:'flex', gap:6 }}>
             {['Washed','Natural','Honey'].map(p=><GhostChip key={p} label={p} active={f.process===p} onPress={()=>set('process',p)} />)}
+          </div>
+        </div>
+        <div style={{ marginBottom:14 }}>
+          <div style={{ display:'flex', alignItems:'baseline', gap:8, marginBottom:8 }}>
+            <span style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>Roast Level</span>
+            {f.roastLevel > 0 && (
+              <span style={{ fontSize:9, color:roastColor(f.roastLevel), fontFamily:'DM Mono, monospace' }}>
+                {f.roastLevel} · {roastLabel(f.roastLevel)}
+              </span>
+            )}
+          </div>
+          <div style={{ display:'flex', gap:4 }}>
+            {Array.from({length:10},(_,i)=>{
+              const n = i+1;
+              const c = n<=3?'#C8A66A':n<=7?'#8B5530':'#3D1A06';
+              const filled = f.roastLevel >= n;
+              return (
+                <div key={n} onClick={()=>set('roastLevel', f.roastLevel===n ? 0 : n)}
+                  style={{ flex:1, height:26, borderRadius:5, cursor:'pointer',
+                    background: filled ? c : G.surface,
+                    border:'0.5px solid '+(filled ? c : G.chipBorder),
+                    transition:'all 0.1s' }} />
+              );
+            })}
+          </div>
+          <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
+            <span style={{ fontSize:7.5, color:G.label, fontFamily:'DM Mono, monospace' }}>Light</span>
+            <span style={{ fontSize:7.5, color:G.label, fontFamily:'DM Mono, monospace' }}>Dark</span>
           </div>
         </div>
         <div style={{ marginBottom:16 }}>
@@ -1043,7 +1080,7 @@ function BeanLibrary({ beans, onTab, onAdd, onAddBean, onBeanPress }) {
                 fontFamily:'Cormorant Garamond, serif',
                 whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.name}</div>
               <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:2 }}>
-                {[b.roaster,b.process].filter(Boolean).join(' · ')}
+                {[b.roaster, b.process, roastLabel(b.roastLevel)].filter(Boolean).join(' · ')}
               </div>
               <div style={{ marginTop:8, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                 <RatingDots n={b.rating} />
@@ -1285,7 +1322,11 @@ function BeanPicker({ beans=[], value='', onChange, onBeanSelect }) {
                 display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div>
                 <div style={{ fontSize:12, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{b.name}</div>
-                {b.roaster && <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{b.roaster}</div>}
+                {(b.roaster || roastLabel(b.roastLevel)) && (
+                  <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+                    {[b.roaster, roastLabel(b.roastLevel)].filter(Boolean).join(' · ')}
+                  </div>
+                )}
               </div>
               {b.name===value && <span style={{ fontSize:9, color:P.cafe }}>✓</span>}
             </div>
@@ -1405,7 +1446,34 @@ function BeanDetail({ bean, onBack, onEdit }) {
         <FormDivider />
         <div style={{ display:'flex', gap:8, marginBottom:14 }}>
           <GhostChip label={bean.process||'Washed'} active />
+          {roastLabel(bean.roastLevel) && (
+            <div style={{ padding:'5px 13px', borderRadius:20, fontSize:10,
+              fontFamily:'DM Mono, monospace', fontWeight:300, letterSpacing:'0.02em',
+              background: roastColor(bean.roastLevel)+'22',
+              color: roastColor(bean.roastLevel),
+              border:'1px solid '+roastColor(bean.roastLevel)+'66' }}>
+              {roastLabel(bean.roastLevel)}
+            </div>
+          )}
         </div>
+        {bean.roastLevel > 0 && (
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Roast Level</div>
+            <div style={{ display:'flex', gap:4, marginBottom:4 }}>
+              {Array.from({length:10},(_,i)=>{
+                const n = i+1;
+                const c = n<=3?'#C8A66A':n<=7?'#8B5530':'#3D1A06';
+                return <div key={n} style={{ flex:1, height:8, borderRadius:2,
+                  background: bean.roastLevel>=n ? c : G.surface }} />;
+              })}
+            </div>
+            <div style={{ display:'flex', justifyContent:'space-between' }}>
+              <span style={{ fontSize:7.5, color:G.label, fontFamily:'DM Mono, monospace' }}>Light</span>
+              <span style={{ fontSize:9, color:roastColor(bean.roastLevel), fontFamily:'DM Mono, monospace' }}>{bean.roastLevel} / 10</span>
+              <span style={{ fontSize:7.5, color:G.label, fontFamily:'DM Mono, monospace' }}>Dark</span>
+            </div>
+          </div>
+        )}
         {bean.rating>0 && (
           <div style={{ marginBottom:14 }}>
             <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:6, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
