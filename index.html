@@ -227,6 +227,63 @@ function useLS(key, init) {
   return [val, set];
 }
 
+// ── Community library ─────────────────────────────────────────────────────────
+// The app reads reviewed catalog data from community/*.json (deployed with the
+// site) and queues opt-in user submissions locally. Phase B: fill in url/key
+// (Supabase project URL + anon key) to sync the queue to the inbox database.
+const COMMUNITY_SUBMIT = { url:'', key:'' };
+
+function queueShare(type, payload) {
+  try {
+    const q = JSON.parse(localStorage.getItem('share_queue')||'[]');
+    q.push({ id:genId(), type, payload, at:new Date().toISOString() });
+    localStorage.setItem('share_queue', JSON.stringify(q));
+  } catch {}
+}
+
+async function flushShareQueue() {
+  if (!COMMUNITY_SUBMIT.url || !COMMUNITY_SUBMIT.key) return;
+  let q = [];
+  try { q = JSON.parse(localStorage.getItem('share_queue')||'[]'); } catch {}
+  if (!q.length) return;
+  try {
+    const r = await fetch(COMMUNITY_SUBMIT.url + '/rest/v1/submissions', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', apikey:COMMUNITY_SUBMIT.key,
+        Authorization:'Bearer '+COMMUNITY_SUBMIT.key, Prefer:'return=minimal' },
+      body: JSON.stringify(q.map(s => ({ type:s.type, payload:s.payload, client_at:s.at })))
+    });
+    if (r.ok) localStorage.setItem('share_queue', '[]');
+  } catch {}
+}
+
+function useCommunity() {
+  const [lib, setLib] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('community_cache')) || { beans:[], gear:[], recipes:[] }; }
+    catch { return { beans:[], gear:[], recipes:[] }; }
+  });
+  useEffect(() => {
+    let live = true;
+    Promise.all(['beans','gear','recipes'].map(k =>
+      fetch('community/'+k+'.json', { cache:'no-cache' })
+        .then(r => r.ok ? r.json() : null).catch(() => null)
+    )).then(([b,g,r]) => {
+      if (!live) return;
+      setLib(prev => {
+        const next = {
+          beans:   Array.isArray(b?.items) ? b.items : prev.beans,
+          gear:    Array.isArray(g?.items) ? g.items : prev.gear,
+          recipes: Array.isArray(r?.items) ? r.items : prev.recipes,
+        };
+        try { localStorage.setItem('community_cache', JSON.stringify(next)); } catch {}
+        return next;
+      });
+    });
+    return () => { live = false; };
+  }, []);
+  return lib;
+}
+
 // ── Shared primitives ────────────────────────────────────────────────────────
 
 function RatingSquares({ n=0, size=18, onChange }) {
@@ -1376,25 +1433,62 @@ function BeanAvatar({ color }) {
   );
 }
 
-function AddBeanForm({ initial={}, onBack, onSave, onUpdate }) {
+function AddBeanForm({ initial={}, onBack, onSave, onUpdate, communityBeans=[] }) {
   const [f, setF] = useState({ name:'', roaster:'', process:'Washed', roastLevel:0, rating:0, ...initial });
+  const [share, setShare] = useState(false);
+  const [suggestOff, setSuggestOff] = useState(false);
   const initStr = useRef(JSON.stringify({ name:'', roaster:'', process:'Washed', roastLevel:0, rating:0, ...initial }));
   const set = (k,v) => setF(p=>({...p,[k]:v}));
   const hasChanges = JSON.stringify(f) !== initStr.current;
   const handleSave = () => {
     if (!f.name.trim()) return;
     const bean = { id:initial.id||genId(), brews:initial.brews||0, color:initial.color||BEAN_COLORS[Math.floor(Math.random()*BEAN_COLORS.length)], ...f };
+    if (share && !initial.id) queueShare('bean', { name:f.name.trim(), roaster:f.roaster||'', process:f.process||'', roastLevel:f.roastLevel||0 });
     onUpdate ? onUpdate(bean) : onSave(bean);
   };
   const handleBack = () => {
     if (hasChanges) { if (window.confirm('Save changes before leaving?')) handleSave(); else onBack(); }
     else onBack();
   };
+  const nq = f.name.trim().toLowerCase();
+  const suggestions = (!initial.id && !suggestOff && nq.length>=2)
+    ? communityBeans.filter(b => b && b.name &&
+        (b.name.toLowerCase().includes(nq) || (b.roaster||'').toLowerCase().includes(nq)) &&
+        b.name.toLowerCase() !== nq).slice(0,4)
+    : [];
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
       <NavBar title={initial.id ? 'Edit Bean' : 'Add Bean'} onBack={handleBack} onSave={handleSave} />
       <div className="scroll-y" style={{ flex:1, padding:'14px 16px' }}>
-        <GhostField label="Bean Name" placeholder="Ethiopia Yirgacheffe…" value={f.name} onChange={v=>set('name',v)} />
+        <div style={{ marginBottom:12 }}>
+          <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace',
+            marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' }}>Bean Name</div>
+          <div style={{ height:42, background:G.surface, border:'1px solid '+(suggestions.length?P.cafe:G.border),
+            borderRadius: suggestions.length ? '10px 10px 0 0' : 10,
+            display:'flex', alignItems:'center', padding:'0 14px' }}>
+            <input placeholder="Ethiopia Yirgacheffe…" value={f.name}
+              onChange={e=>{ set('name', e.target.value); setSuggestOff(false); }}
+              style={{ fontSize:12, color:G.text }} />
+          </div>
+          {suggestions.length>0 && (
+            <div style={{ background:G.surface, border:'1px solid '+P.cafe, borderTop:'none',
+              borderRadius:'0 0 10px 10px', overflow:'hidden' }}>
+              {suggestions.map(s=>(
+                <div key={s.name+(s.roaster||'')}
+                  onClick={()=>{ setF(p=>({ ...p, name:s.name, roaster:s.roaster||p.roaster,
+                    process:s.process||p.process, roastLevel:s.roastLevel||p.roastLevel })); setSuggestOff(true); }}
+                  style={{ padding:'9px 14px', borderBottom:'0.5px solid '+G.border, cursor:'pointer',
+                    display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <div>
+                    <div style={{ fontSize:11, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{s.name}</div>
+                    {s.roaster && <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{s.roaster}</div>}
+                  </div>
+                  <span style={{ fontSize:7.5, color:P.cafe, fontFamily:'DM Mono, monospace', letterSpacing:'0.06em' }}>COMMUNITY</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <GhostField label="Roaster" placeholder="Counter Culture…" value={f.roaster} onChange={v=>set('roaster',v)} />
         <div style={{ marginBottom:14 }}>
           <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Process</div>
@@ -1434,6 +1528,20 @@ function AddBeanForm({ initial={}, onBack, onSave, onUpdate }) {
           <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
           <RatingSquares n={f.rating} size={20} onChange={v=>set('rating',v)} />
         </div>
+        {!initial.id && (
+          <div onClick={()=>setShare(s=>!s)} style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16, cursor:'pointer' }}>
+            <div style={{ width:16, height:16, borderRadius:4, flexShrink:0,
+              border:'0.5px solid '+(share?P.cafe:G.chipBorder),
+              background: share?P.cafe:G.surface,
+              display:'flex', alignItems:'center', justifyContent:'center' }}>
+              {share && <span style={{ fontSize:10, color:'#182635', lineHeight:1 }}>✓</span>}
+            </div>
+            <div>
+              <div style={{ fontSize:12, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>Share with the community library</div>
+              <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:2 }}>name, roaster, process & roast level only — never your notes or ratings</div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1629,18 +1737,19 @@ function StatsDash({ entries, onTab, onAdd }) {
 }
 
 // ── Gear Locker ───────────────────────────────────────────────────────────────
-function GearLocker({ gear, onChange }) {
+function GearLocker({ gear, onChange, catalog=GEAR_CATALOG }) {
   const [q, setQ]               = useState('');
   const [customMode, setCustom] = useState(false);
   const [cName, setCName]       = useState('');
   const [cCat, setCCat]         = useState('grinder');
   const [cAdj, setCAdj]         = useState('clicks');
+  const [cShare, setCShare]     = useState(false);
   const [editId, setEditId]     = useState(null);
 
   const owned = new Set(gear.map(g => g.n.toLowerCase()));
   const ql = q.trim().toLowerCase();
   const results = ql
-    ? GEAR_CATALOG.filter(it => !owned.has(it.n.toLowerCase()) && it.n.toLowerCase().includes(ql)).slice(0,6)
+    ? catalog.filter(it => !owned.has(it.n.toLowerCase()) && it.n.toLowerCase().includes(ql)).slice(0,6)
     : [];
 
   const add = it => { onChange([...gear, { id:genId(), ...it }]); setQ(''); };
@@ -1650,7 +1759,8 @@ function GearLocker({ gear, onChange }) {
     if (cCat==='grinder') item.adj = cAdj;
     if (cCat==='brewer' || cCat==='machine') item.m = [cCat==='machine' ? 'Espresso' : n];
     onChange([...gear, item]);
-    setCName(''); setCustom(false); setQ('');
+    if (cShare) { const { id, ...pub } = item; queueShare('gear', pub); }
+    setCName(''); setCustom(false); setCShare(false); setQ('');
   };
   const remove = id => { onChange(gear.filter(g => g.id!==id)); if (editId===id) setEditId(null); };
   const update = (id, k, v) => onChange(gear.map(g => g.id===id ? { ...g, [k]:v } : g));
@@ -1757,11 +1867,20 @@ function GearLocker({ gear, onChange }) {
               </div>
             </>
           )}
+          <div onClick={()=>setCShare(s=>!s)} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10, cursor:'pointer' }}>
+            <div style={{ width:14, height:14, borderRadius:4, flexShrink:0,
+              border:'0.5px solid '+(cShare?P.cafe:G.chipBorder),
+              background: cShare?P.cafe:G.surface,
+              display:'flex', alignItems:'center', justifyContent:'center' }}>
+              {cShare && <span style={{ fontSize:9, color:'#182635', lineHeight:1 }}>✓</span>}
+            </div>
+            <span style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', fontWeight:300 }}>share with the community library</span>
+          </div>
           <div style={{ display:'flex', gap:8 }}>
             <div onClick={addCustom} style={{ flex:1, background:P.cafe, borderRadius:8, padding:'8px', textAlign:'center', cursor:'pointer' }}>
               <span style={{ fontSize:10, color:'#182635', fontFamily:'DM Mono, monospace' }}>add</span>
             </div>
-            <div onClick={()=>{ setCustom(false); setCName(''); }} style={{ flex:1, border:'1px solid '+G.chipBorder, borderRadius:8, padding:'8px', textAlign:'center', cursor:'pointer' }}>
+            <div onClick={()=>{ setCustom(false); setCName(''); setCShare(false); }} style={{ flex:1, border:'1px solid '+G.chipBorder, borderRadius:8, padding:'8px', textAlign:'center', cursor:'pointer' }}>
               <span style={{ fontSize:10, color:G.label, fontFamily:'DM Mono, monospace' }}>cancel</span>
             </div>
           </div>
@@ -1772,7 +1891,7 @@ function GearLocker({ gear, onChange }) {
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange }) {
+function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, gearCatalog=GEAR_CATALOG }) {
   const total = entries.length;
   const cafe  = entries.filter(e=>e.type==='cafe').length;
   const brew  = entries.filter(e=>e.type==='brew').length;
@@ -1796,7 +1915,20 @@ function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange }) 
             </div>
           ))}
         </div>
-        <GearLocker gear={gear} onChange={onGearChange} />
+        <GearLocker gear={gear} onChange={onGearChange} catalog={gearCatalog} />
+        {(() => {
+          let n = 0;
+          try { n = JSON.parse(localStorage.getItem('share_queue')||'[]').length; } catch {}
+          if (!n) return null;
+          return (
+            <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
+              <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>Community</div>
+              <div style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6 }}>
+                {n} submission{n!==1?'s':''} queued — will sync automatically once community sharing goes live.
+              </div>
+            </div>
+          );
+        })()}
         <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
           <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>About</div>
           <div style={{ fontSize:12, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6 }}>
@@ -1887,8 +2019,17 @@ function BeanPicker({ beans=[], value='', onChange, onBeanSelect }) {
 // ── Entry Detail ──────────────────────────────────────────────────────────────
 function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain, onStartTimer }) {
   const [pinned, setPinned] = useState(false);
+  const [shared, setShared] = useState(false);
   const isBrew = entry.type === 'brew';
   const canPin = isBrew && onPinDialed && beans.some(b => b.name===entry.beanName);
+  const shareRecipe = () => {
+    if (shared) return;
+    queueShare('recipe', { beanName:entry.beanName||'', roaster:entry.roaster||'',
+      method:entry.method||'', grinder:entry.grinder||'', machine:entry.machine||'',
+      dose:entry.dose||'', water:entry.water||'', temp:entry.temp||'',
+      brewTime:entry.brewTime||'', grindSize:entry.grindSize||'', ratio:entry.ratio||'' });
+    setShared(true);
+  };
   const title = isBrew ? (entry.beanName||'Unnamed Brew') : (entry.cafeName||'Unnamed Café');
   const dateStr = new Date(entry.date).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   return (
@@ -1975,6 +2116,17 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
                 </span>
               </div>
             )}
+            {pinned && (
+              <div onClick={shareRecipe}
+                style={{ marginBottom:10, padding:'11px', borderRadius:10, textAlign:'center',
+                  cursor: shared ? 'default' : 'pointer',
+                  background: shared ? 'rgba(212,151,106,0.12)' : 'transparent',
+                  border:'1px solid '+(shared ? P.cafe : G.chipBorder) }}>
+                <span style={{ fontSize:11, color: shared ? P.cafe : G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+                  {shared ? '✓ recipe queued for the community library' : 'share this recipe with the community →'}
+                </span>
+              </div>
+            )}
           </>
         )}
         {(entry.notes||entry.whatIdChange||entry.recipe) && (
@@ -1991,8 +2143,10 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
 }
 
 // ── Bean Detail ───────────────────────────────────────────────────────────────
-function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow }) {
+function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow, communityRecipes=[] }) {
   const attempts = entries.filter(e => e.type==='brew' && e.beanName===bean.name);
+  const commRecipes = communityRecipes.filter(r => r && r.beanName &&
+    r.beanName.toLowerCase()===bean.name.toLowerCase()).slice(0,3);
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
       <div style={{ padding:'8px 16px', paddingTop:'calc(8px + env(safe-area-inset-top))',
@@ -2076,6 +2230,26 @@ function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow }) {
             </>
           );
         })()}
+        {commRecipes.length>0 && (
+          <>
+            <FormDivider />
+            <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Community Recipes</div>
+            {commRecipes.map((r,i)=>(
+              <div key={i} style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+                    {[r.method, r.grindSize && `grind ${r.grindSize}`, r.ratio, r.brewTime].filter(Boolean).join(' · ')}
+                  </div>
+                  {r.grinder && <div style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:1 }}>{r.grinder}</div>}
+                </div>
+                <div onClick={()=>onBrewNow && onBrewNow({ ...r, beanName:bean.name, roaster:bean.roaster||r.roaster||'' })}
+                  style={{ border:'1px solid '+P.brew, borderRadius:8, padding:'5px 12px', cursor:'pointer', flexShrink:0 }}>
+                  <span style={{ fontSize:9, color:P.brew, fontFamily:'DM Mono, monospace' }}>▶ brew</span>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
         {attempts.length>0 && (
           <>
             <FormDivider />
@@ -2109,6 +2283,10 @@ function App() {
   const [customNotes, setCustomNotes] = useLS('custom_notes',    []);
   const [customDrinks,setCustomDrinks]= useLS('custom_drinks',   []);
   const [gear,        setGear]        = useLS('coffee_gear',     []);
+  const community = useCommunity();
+  useEffect(() => { flushShareQueue(); }, []);
+  const gearCatalog = [...GEAR_CATALOG, ...community.gear.filter(g =>
+    g && g.n && !GEAR_CATALOG.some(c => c.n.toLowerCase()===g.n.toLowerCase()))];
   const [view,    setView]          = useState('home');
   const [showSheet, setSheet]       = useState(false);
   const [formInit,  setInit]        = useState({});
@@ -2152,15 +2330,15 @@ function App() {
       {view==='home'         && <HomeScreen    entries={entries} {...sp} onEntryPress={e=>{ setSelEntry(e); setView('entry-detail'); }} onLogCafe={p=>{ setInit(p); setView('cafe-form'); }} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
       {view==='beans'        && <BeanLibrary   beans={beans} {...sp} onAddBean={()=>setView('add-bean')} onBeanPress={b=>{ setSelBean(b); setView('bean-detail'); }} />}
       {view==='stats'        && <StatsDash     entries={entries} {...sp} />}
-      {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} gear={gear} onGearChange={setGear} />}
+      {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} gear={gear} onGearChange={setGear} gearCatalog={gearCatalog} />}
       {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} beans={beans} onPinDialed={pinDialed} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
-      {view==='bean-detail'  && selectedBean  && <BeanDetail  bean={selectedBean}  onBack={()=>setView('beans')} onEdit={()=>{ setInit(selectedBean); setView('bean-form-edit'); }} entries={entries} onBrewNow={startTimer} />}
+      {view==='bean-detail'  && selectedBean  && <BeanDetail  bean={selectedBean}  onBack={()=>setView('beans')} onEdit={()=>{ setInit(selectedBean); setView('bean-form-edit'); }} entries={entries} onBrewNow={startTimer} communityRecipes={community.recipes} />}
       {view==='brew-timer'   && timerRecipe   && <TimerScreen recipe={timerRecipe} onCancel={()=>setView('home')} onLog={saveEntry} />}
       {view==='cafe-form'    && <CafeForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   customNotes={customNotes} onAddNote={setCustomNotes} customDrinks={customDrinks} onAddDrink={setCustomDrinks} />}
       {view==='brew-form'    && <BrewForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   beans={beans} entries={entries} gear={gear} customNotes={customNotes} onAddNote={setCustomNotes} />}
       {view==='cafe-form-edit'&& <CafeForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} customNotes={customNotes} onAddNote={setCustomNotes} customDrinks={customDrinks} onAddDrink={setCustomDrinks} />}
       {view==='brew-form-edit'&& <BrewForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} beans={beans} entries={entries} gear={gear} customNotes={customNotes} onAddNote={setCustomNotes} />}
-      {view==='add-bean'     && <AddBeanForm onBack={()=>setView('beans')} onSave={b=>{ setBeans([b,...beans]); setView('beans'); }} />}
+      {view==='add-bean'     && <AddBeanForm onBack={()=>setView('beans')} onSave={b=>{ setBeans([b,...beans]); setView('beans'); }} communityBeans={community.beans} />}
       {view==='bean-form-edit'&& <AddBeanForm initial={formInit} onBack={()=>setView('bean-detail')} onUpdate={updateBean} />}
       {showSheet && <QuickCaptureSheet onClose={()=>setSheet(false)} onSave={saveEntry} onExpand={expand} beans={beans} gear={gear} />}
     </div>
