@@ -114,6 +114,45 @@ function roastColor(n) {
   return n <= 3 ? '#C8A66A' : n <= 7 ? '#8B5530' : '#3D1A06';
 }
 
+// ── Brew timer utilities ──────────────────────────────────────────────────────
+function fmtSec(s) {
+  const m = Math.floor(s/60), ss = Math.floor(s%60);
+  return `${m}:${String(ss).padStart(2,'0')}`;
+}
+function parseTimeStr(t) {
+  if (!t) return 0;
+  const m = String(t).match(/(\d+)\s*[:.]\s*(\d{1,2})/);
+  if (m) return (+m[1])*60 + (+m[2]);
+  const n = parseFloat(t);
+  if (isNaN(n)) return 0;
+  return n < 10 ? Math.round(n*60) : Math.round(n);
+}
+function buildSteps(r) {
+  const dose  = parseFloat(r.dose)  || 0;
+  const water = parseFloat(r.water) || 0;
+  const total = parseTimeStr(r.brewTime) || 180;
+  const method = (r.method||'').toLowerCase();
+  if (method.includes('espresso')) {
+    return [{ at:0, label: water ? `Pull shot — target ${water}g out` : 'Pull shot' }];
+  }
+  if (method.includes('press')) {
+    return [
+      { at:0, label: water ? `Pour ${water}g, stir gently` : 'Pour water, stir gently' },
+      { at:Math.max(total-30,60), label:'Break the crust, skim' },
+      { at:total, label:'Plunge & serve' },
+    ];
+  }
+  if (!water) return [{ at:0, label:'Start brewing' }];
+  const bloom = dose ? Math.round(dose*2) : Math.round(water*0.15);
+  const mid = Math.round(water*0.6);
+  return [
+    { at:0, label:`Bloom — pour ${bloom}g` },
+    { at:45, label:`First pour — up to ${mid}g` },
+    { at:Math.round(total*0.55), label:`Final pour — up to ${water}g` },
+    { at:total, label:'Draw down' },
+  ];
+}
+
 // ── Geo / map utilities ───────────────────────────────────────────────────────
 function haversineM(lat1, lon1, lat2, lon2) {
   const R = 6371000;
@@ -170,8 +209,11 @@ function useLS(key, init) {
     catch { return init; }
   });
   const set = useCallback(v => {
-    setVal(v);
-    try { localStorage.setItem(key, JSON.stringify(v)); } catch {}
+    setVal(prev => {
+      const next = typeof v === 'function' ? v(prev) : v;
+      try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
+      return next;
+    });
   }, [key]);
   return [val, set];
 }
@@ -601,13 +643,16 @@ function MapView({ entries, onLogCafe }) {
 }
 
 // ── Home Screen ───────────────────────────────────────────────────────────────
-function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe }) {
+function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgain, onStartTimer }) {
   const [calOpen, setCalOpen] = useState(false);
   const [filterDay, setFilterDay] = useState(null);
   const [mapMode, setMapMode] = useState(false);
   const handleDaySelect = day => { setFilterDay(day); setCalOpen(false); };
   const displayEntries = filterDay ? entries.filter(e=>e.date.startsWith(filterDay)) : entries;
   const groups = groupByDate(displayEntries);
+  const todayKey = new Date().toISOString().slice(0,10);
+  const lastBrew = entries.find(e => e.type==='brew');
+  const showBrewAgain = lastBrew && !lastBrew.date.startsWith(todayKey);
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
       <div style={{ padding:'10px 16px 12px', background:P.bg,
@@ -676,6 +721,29 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe }) {
             </div>
           )}
 
+          {!calOpen && !filterDay && showBrewAgain && (
+            <div style={{ background:'rgba(122,154,176,0.12)', border:'0.5px solid rgba(122,154,176,0.4)',
+              borderRadius:12, padding:'12px 14px', margin:'10px 0 4px' }}>
+              <div style={{ fontSize:8, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', marginBottom:5 }}>MORNING BREW · LAST TIME</div>
+              <div style={{ fontSize:16, fontWeight:500, color:P.headerText, fontFamily:'Cormorant Garamond, serif' }}>
+                {lastBrew.beanName||'Unnamed Brew'}
+              </div>
+              <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:2 }}>
+                {[lastBrew.method, lastBrew.grindSize && `grind ${lastBrew.grindSize}`, lastBrew.ratio, lastBrew.brewTime].filter(Boolean).join(' · ')}
+              </div>
+              <div style={{ display:'flex', gap:8, marginTop:10 }}>
+                <div onClick={()=>onStartTimer && onStartTimer(lastBrew)}
+                  style={{ flex:1, background:P.brew, borderRadius:9, padding:'9px', textAlign:'center', cursor:'pointer' }}>
+                  <span style={{ fontSize:10, color:'#182635', fontFamily:'DM Mono, monospace' }}>▶ brew with timer</span>
+                </div>
+                <div onClick={()=>onBrewAgain && onBrewAgain(lastBrew)}
+                  style={{ flex:1, border:'1px solid '+P.brew, borderRadius:9, padding:'9px', textAlign:'center', cursor:'pointer' }}>
+                  <span style={{ fontSize:10, color:P.brew, fontFamily:'DM Mono, monospace' }}>log it again ☕</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {!calOpen && groups.length===0 && (
             <div style={{ textAlign:'center', padding:'60px 20px',
               color:P.headerMuted, fontFamily:'DM Mono, monospace', fontSize:12, fontWeight:300 }}>
@@ -727,6 +795,157 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe }) {
       )}
 
       <TabBar active={0} onTab={onTab} onAdd={onAdd} />
+    </div>
+  );
+}
+
+// ── Brew Timer ────────────────────────────────────────────────────────────────
+function TimerScreen({ recipe, onCancel, onLog }) {
+  const [elapsed,  setElapsed]  = useState(0);
+  const [running,  setRunning]  = useState(false);
+  const [finished, setFinished] = useState(false);
+  const [rating,   setRating]   = useState(0);
+  const startRef = useRef(0);
+
+  const steps  = buildSteps(recipe);
+  const target = parseTimeStr(recipe.brewTime);
+
+  useEffect(() => {
+    if (!running) return;
+    startRef.current = Date.now() - elapsed*1000;
+    const id = setInterval(() => setElapsed(Math.floor((Date.now()-startRef.current)/1000)), 250);
+    return () => clearInterval(id);
+  }, [running]);
+
+  useEffect(() => {
+    let lock = null;
+    if (navigator.wakeLock) navigator.wakeLock.request('screen').then(l => lock = l).catch(()=>{});
+    return () => { if (lock) lock.release().catch(()=>{}); };
+  }, []);
+
+  const curIdx = steps.reduce((acc,s,i) => elapsed >= s.at ? i : acc, 0);
+  const over   = target > 0 && elapsed > target;
+
+  const handleLog = () => onLog({
+    id:genId(), date:new Date().toISOString(), type:'brew',
+    beanName:recipe.beanName||'', roaster:recipe.roaster||'',
+    method:recipe.method||'', dose:recipe.dose||'', water:recipe.water||'',
+    temp:recipe.temp||'', brewTime:fmtSec(elapsed), grindSize:recipe.grindSize||'',
+    ratio:recipe.ratio||'', tastingNotes:[], rating,
+    whatIdChange:'', recipe:recipe.recipe||''
+  });
+
+  const params = [['dose',recipe.dose],['water',recipe.water],['temp',recipe.temp],['grind',recipe.grindSize],['ratio',recipe.ratio]].filter(([,v])=>v);
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
+      <div style={{ padding:'8px 16px', paddingTop:'calc(8px + env(safe-area-inset-top))',
+        display:'flex', justifyContent:'space-between', alignItems:'center',
+        borderBottom:'0.5px solid rgba(240,228,204,0.15)', flexShrink:0 }}>
+        <div onClick={onCancel} style={{ fontSize:11, color:P.cafe, cursor:'pointer', padding:'4px 0' }}>✕ Cancel</div>
+        <div style={{ fontSize:13, fontWeight:500, color:G.text, fontFamily:'Cormorant Garamond, serif', letterSpacing:'0.04em' }}>Brew Timer</div>
+        <div style={{ width:44 }} />
+      </div>
+
+      <div className="scroll-y" style={{ flex:1, padding:'20px 16px', display:'flex', flexDirection:'column' }}>
+        <div style={{ textAlign:'center', marginBottom:6 }}>
+          <div style={{ fontSize:22, fontWeight:500, color:P.headerText, fontFamily:'Cormorant Garamond, serif' }}>{recipe.beanName||'Brew'}</div>
+          {recipe.method && <div style={{ fontSize:9, color:P.brew, fontFamily:'DM Mono, monospace', marginTop:3 }}>{recipe.method}</div>}
+        </div>
+        {params.length>0 && (
+          <div style={{ display:'flex', justifyContent:'center', flexWrap:'wrap', gap:'2px 12px', marginBottom:18 }}>
+            {params.map(([l,v])=>(
+              <span key={l} style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>{l} <span style={{ color:G.text }}>{v}</span></span>
+            ))}
+          </div>
+        )}
+        <div style={{ textAlign:'center', marginBottom:18 }}>
+          <div style={{ fontSize:60, fontWeight:300, color: over ? P.cafe : P.headerText, fontFamily:'DM Mono, monospace', lineHeight:1 }}>{fmtSec(elapsed)}</div>
+          {target>0 && <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginTop:6 }}>target {fmtSec(target)}</div>}
+        </div>
+
+        {!finished && (
+          <div style={{ marginBottom:20 }}>
+            {steps.map((s,i)=>(
+              <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 10px',
+                borderRadius:8, marginBottom:3,
+                background: i===curIdx && elapsed>0 ? 'rgba(122,154,176,0.14)' : 'transparent' }}>
+                <span style={{ fontSize:9, color: i<=curIdx && elapsed>0 ? P.brew : P.headerMuted,
+                  fontFamily:'DM Mono, monospace', width:34, flexShrink:0 }}>{fmtSec(s.at)}</span>
+                <span style={{ fontSize:11, fontFamily:'DM Mono, monospace', fontWeight:300,
+                  color: i===curIdx && elapsed>0 ? G.text : P.headerMuted,
+                  opacity: i>curIdx ? 0.6 : 1 }}>{i<curIdx?'✓ ':''}{s.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ marginTop:'auto', paddingBottom:16 }}>
+          {!finished ? (
+            <div style={{ display:'flex', gap:10 }}>
+              <div onClick={()=>setRunning(r=>!r)}
+                style={{ flex:1, background: running ? 'transparent' : P.brew,
+                  border:'1px solid '+P.brew, borderRadius:12, padding:'14px', textAlign:'center', cursor:'pointer' }}>
+                <span style={{ fontSize:12, fontFamily:'DM Mono, monospace', color: running ? P.brew : '#182635' }}>
+                  {running ? 'pause' : elapsed>0 ? 'resume' : '▶ start'}
+                </span>
+              </div>
+              {elapsed>0 && (
+                <div onClick={()=>{ setRunning(false); setFinished(true); }}
+                  style={{ flex:1, background:P.cafe, borderRadius:12, padding:'14px', textAlign:'center', cursor:'pointer' }}>
+                  <span style={{ fontSize:12, fontFamily:'DM Mono, monospace', color:'#182635' }}>finish ✓</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <div style={{ textAlign:'center', marginBottom:10 }}>
+                <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginBottom:8 }}>brewed in {fmtSec(elapsed)} — how was it?</div>
+                <div style={{ display:'flex', justifyContent:'center' }}><RatingSquares n={rating} size={22} onChange={setRating} /></div>
+              </div>
+              <div onClick={handleLog} style={{ background:P.cafe, borderRadius:12, padding:'14px',
+                textAlign:'center', cursor:'pointer', boxShadow:'0 3px 10px rgba(212,151,106,0.3)' }}>
+                <span style={{ fontSize:12, fontFamily:'DM Mono, monospace', color:'#182635' }}>log this brew</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Dial-in panel (shown in BrewForm when the bean has brew history) ──────────
+function DialInPanel({ last, attempt }) {
+  const [taste, setTaste] = useState(null);
+  const tips = {
+    sour:   'Sour or weak usually means under-extraction — try a finer grind, hotter water, or a longer brew.',
+    right:  'Sounds dialed in — after saving, open the entry and pin it as your go-to recipe for this bean.',
+    bitter: 'Bitter or harsh usually means over-extraction — try a coarser grind, cooler water, or a shorter brew.',
+  };
+  const lastLine = [last.grindSize && `grind ${last.grindSize}`, last.brewTime && `time ${last.brewTime}`,
+    last.ratio && `ratio ${last.ratio}`, last.temp].filter(Boolean).join(' · ');
+  return (
+    <div style={{ background:'rgba(122,154,176,0.10)', border:'0.5px solid rgba(122,154,176,0.35)',
+      borderRadius:12, padding:'11px 13px', marginBottom:14 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+        <span style={{ fontSize:8, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em' }}>DIAL-IN · ATTEMPT #{attempt}</span>
+        {last.rating>0 && <RatingDots n={last.rating} />}
+      </div>
+      <div style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, marginBottom:8 }}>
+        last time: {lastLine || 'no parameters logged'}
+      </div>
+      <div style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginBottom:6 }}>How did the last one taste?</div>
+      <div style={{ display:'flex', gap:5 }}>
+        {[['sour','Sour / weak'],['right','Just right'],['bitter','Bitter / harsh']].map(([k,l])=>(
+          <GhostChip key={k} label={l} active={taste===k} onPress={()=>setTaste(taste===k?null:k)} />
+        ))}
+      </div>
+      {taste && (
+        <div style={{ fontSize:9.5, color:P.brew, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6, marginTop:8 }}>
+          {tips[taste]}
+        </div>
+      )}
     </div>
   );
 }
@@ -893,7 +1112,7 @@ function CafeForm({ initial={}, onBack, onSave, onUpdate, customNotes=[], onAddN
 }
 
 // ── Brew Full Form ────────────────────────────────────────────────────────────
-function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], customNotes=[], onAddNote=()=>{} }) {
+function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], customNotes=[], onAddNote=()=>{} }) {
   const defaults = { beanName:'', roaster:'', method:'V60', dose:'', water:'',
     temp:'', brewTime:'', grindSize:'', ratio:'', tastingNotes:[], rating:0, whatIdChange:'', recipe:'' };
   const [f, setF] = useState({ ...defaults, ...initial });
@@ -922,6 +1141,11 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], customNotes=
         <BeanPicker beans={beans} value={f.beanName} onChange={v=>set('beanName',v)}
           onBeanSelect={b=>setF(p=>({ ...p, beanName:b.name, roaster:b.roaster||p.roaster }))} />
         <GhostField label="Roaster" placeholder="Counter Culture, Intelligentsia…" value={f.roaster} onChange={v=>set('roaster',v)} />
+        {(() => {
+          if (initial.id) return null;
+          const hist = entries.filter(e => e.type==='brew' && e.beanName && e.beanName===f.beanName);
+          return hist.length>0 ? <DialInPanel last={hist[0]} attempt={hist.length+1} /> : null;
+        })()}
         <div style={{ marginBottom:14 }}>
           <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Brew Method</div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
@@ -1342,8 +1566,10 @@ function BeanPicker({ beans=[], value='', onChange, onBeanSelect }) {
 }
 
 // ── Entry Detail ──────────────────────────────────────────────────────────────
-function EntryDetail({ entry, onBack, onEdit }) {
+function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed }) {
+  const [pinned, setPinned] = useState(false);
   const isBrew = entry.type === 'brew';
+  const canPin = isBrew && onPinDialed && beans.some(b => b.name===entry.beanName);
   const title = isBrew ? (entry.beanName||'Unnamed Brew') : (entry.cafeName||'Unnamed Café');
   const dateStr = new Date(entry.date).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   return (
@@ -1409,6 +1635,17 @@ function EntryDetail({ entry, onBack, onEdit }) {
             )}
             {entry.tastingNotes?.length>0 && (<><FormDivider /><SectionHead label="Tasting" /><div style={{height:6}}/><div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>{entry.tastingNotes.map(n=><GhostChip key={n} label={n} active />)}</div></>)}
             {entry.rating>0 && <div style={{marginBottom:10}}><div style={{fontSize:9,color:G.label,fontFamily:'DM Mono, monospace',marginBottom:6,letterSpacing:'0.1em',textTransform:'uppercase'}}>Rating</div><RatingSquares n={entry.rating} size={16} /></div>}
+            {canPin && (
+              <div onClick={()=>{ if(!pinned){ onPinDialed(entry); setPinned(true); } }}
+                style={{ marginTop:6, marginBottom:10, padding:'11px', borderRadius:10, textAlign:'center',
+                  cursor: pinned ? 'default' : 'pointer',
+                  background: pinned ? 'rgba(122,154,176,0.15)' : 'transparent',
+                  border:'1px solid '+(pinned ? P.brew : G.chipBorder) }}>
+                <span style={{ fontSize:11, color: pinned ? P.brew : G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+                  {pinned ? `✓ pinned as go-to recipe for ${entry.beanName}` : '★ pin as dialed-in recipe for this bean'}
+                </span>
+              </div>
+            )}
           </>
         )}
         {(entry.notes||entry.whatIdChange||entry.recipe) && (
@@ -1425,7 +1662,8 @@ function EntryDetail({ entry, onBack, onEdit }) {
 }
 
 // ── Bean Detail ───────────────────────────────────────────────────────────────
-function BeanDetail({ bean, onBack, onEdit }) {
+function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow }) {
+  const attempts = entries.filter(e => e.type==='brew' && e.beanName===bean.name);
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
       <div style={{ padding:'8px 16px', paddingTop:'calc(8px + env(safe-area-inset-top))',
@@ -1480,6 +1718,47 @@ function BeanDetail({ bean, onBack, onEdit }) {
             <RatingSquares n={bean.rating} size={18} />
           </div>
         )}
+        {bean.dialed && (
+          <>
+            <FormDivider />
+            <div style={{ background:'rgba(122,154,176,0.10)', border:'0.5px solid rgba(122,154,176,0.35)',
+              borderRadius:12, padding:'12px 13px', marginBottom:14 }}>
+              <div style={{ fontSize:8, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', marginBottom:8 }}>★ DIALED-IN RECIPE</div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:'4px 14px', marginBottom:10 }}>
+                {[['Method',bean.dialed.method],['Grind',bean.dialed.grindSize],['Dose',bean.dialed.dose],
+                  ['Water',bean.dialed.water],['Temp',bean.dialed.temp],['Time',bean.dialed.brewTime],
+                  ['Ratio',bean.dialed.ratio]].filter(([,v])=>v).map(([l,v])=>(
+                  <div key={l}>
+                    <span style={{ fontSize:7.5, color:G.label, fontFamily:'DM Mono, monospace', textTransform:'uppercase', letterSpacing:'0.08em' }}>{l} </span>
+                    <span style={{ fontSize:11, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div onClick={()=>onBrewNow && onBrewNow({ ...bean.dialed, beanName:bean.name, roaster:bean.roaster||'' })}
+                style={{ background:P.brew, borderRadius:9, padding:'10px', textAlign:'center', cursor:'pointer' }}>
+                <span style={{ fontSize:11, color:'#182635', fontFamily:'DM Mono, monospace' }}>▶ brew now</span>
+              </div>
+            </div>
+          </>
+        )}
+        {attempts.length>0 && (
+          <>
+            <FormDivider />
+            <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Recent Brews</div>
+            {attempts.slice(0,3).map(a=>(
+              <div key={a.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                <span style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+                  {[a.method, a.grindSize && `grind ${a.grindSize}`, a.brewTime].filter(Boolean).join(' · ') || '—'}
+                </span>
+                <span style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  {a.rating>0 && <RatingDots n={a.rating} />}
+                  <span style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>{formatDate(a.date)}</span>
+                </span>
+              </div>
+            ))}
+            <div style={{ height:6 }} />
+          </>
+        )}
         <FormDivider />
         <DetailRow label="Times Brewed" value={`${bean.brews} brew${bean.brews!==1?'s':''}`} />
         <div style={{ height:32 }} />
@@ -1499,6 +1778,7 @@ function App() {
   const [formInit,  setInit]        = useState({});
   const [selectedEntry, setSelEntry]= useState(null);
   const [selectedBean,  setSelBean] = useState(null);
+  const [timerRecipe,   setTimerRecipe] = useState(null);
 
   const goTab = t => { setSheet(false); setView(['home','beans',null,'stats','profile'][t]); };
 
@@ -1518,20 +1798,29 @@ function App() {
 
   const expand = (type, partial) => { setInit(partial); setSheet(false); setView(type==='cafe'?'cafe-form':'brew-form'); };
 
+  const brewAgain  = src => saveEntry({ ...src, id:genId(), date:new Date().toISOString() });
+  const startTimer = r => { setTimerRecipe(r); setView('brew-timer'); };
+  const pinDialed  = entry => setBeans(prev => prev.map(b => b.name===entry.beanName
+    ? { ...b, dialed:{ method:entry.method||'', dose:entry.dose||'', water:entry.water||'',
+        temp:entry.temp||'', brewTime:entry.brewTime||'', grindSize:entry.grindSize||'',
+        ratio:entry.ratio||'', recipe:entry.recipe||'' } }
+    : b));
+
   const sp = { onTab:goTab, onAdd:()=>setSheet(true) };
 
   return (
     <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background:P.bg }}>
-      {view==='home'         && <HomeScreen    entries={entries} {...sp} onEntryPress={e=>{ setSelEntry(e); setView('entry-detail'); }} onLogCafe={p=>{ setInit(p); setView('cafe-form'); }} />}
+      {view==='home'         && <HomeScreen    entries={entries} {...sp} onEntryPress={e=>{ setSelEntry(e); setView('entry-detail'); }} onLogCafe={p=>{ setInit(p); setView('cafe-form'); }} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
       {view==='beans'        && <BeanLibrary   beans={beans} {...sp} onAddBean={()=>setView('add-bean')} onBeanPress={b=>{ setSelBean(b); setView('bean-detail'); }} />}
       {view==='stats'        && <StatsDash     entries={entries} {...sp} />}
       {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} />}
-      {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} />}
-      {view==='bean-detail'  && selectedBean  && <BeanDetail  bean={selectedBean}  onBack={()=>setView('beans')} onEdit={()=>{ setInit(selectedBean); setView('bean-form-edit'); }} />}
+      {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} beans={beans} onPinDialed={pinDialed} />}
+      {view==='bean-detail'  && selectedBean  && <BeanDetail  bean={selectedBean}  onBack={()=>setView('beans')} onEdit={()=>{ setInit(selectedBean); setView('bean-form-edit'); }} entries={entries} onBrewNow={startTimer} />}
+      {view==='brew-timer'   && timerRecipe   && <TimerScreen recipe={timerRecipe} onCancel={()=>setView('home')} onLog={saveEntry} />}
       {view==='cafe-form'    && <CafeForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   customNotes={customNotes} onAddNote={setCustomNotes} customDrinks={customDrinks} onAddDrink={setCustomDrinks} />}
-      {view==='brew-form'    && <BrewForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   beans={beans} customNotes={customNotes} onAddNote={setCustomNotes} />}
+      {view==='brew-form'    && <BrewForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   beans={beans} entries={entries} customNotes={customNotes} onAddNote={setCustomNotes} />}
       {view==='cafe-form-edit'&& <CafeForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} customNotes={customNotes} onAddNote={setCustomNotes} customDrinks={customDrinks} onAddDrink={setCustomDrinks} />}
-      {view==='brew-form-edit'&& <BrewForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} beans={beans} customNotes={customNotes} onAddNote={setCustomNotes} />}
+      {view==='brew-form-edit'&& <BrewForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} beans={beans} entries={entries} customNotes={customNotes} onAddNote={setCustomNotes} />}
       {view==='add-bean'     && <AddBeanForm onBack={()=>setView('beans')} onSave={b=>{ setBeans([b,...beans]); setView('beans'); }} />}
       {view==='bean-form-edit'&& <AddBeanForm initial={formInit} onBack={()=>setView('bean-detail')} onUpdate={updateBean} />}
       {showSheet && <QuickCaptureSheet onClose={()=>setSheet(false)} onSave={saveEntry} onExpand={expand} />}
