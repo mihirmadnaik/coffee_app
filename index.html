@@ -114,6 +114,15 @@ function roastColor(n) {
   return n <= 3 ? '#C8A66A' : n <= 7 ? '#8B5530' : '#3D1A06';
 }
 
+// Dialed-in recipes are stored per bean+method in bean.dialedByMethod.
+// Older data may have a single bean.dialed snapshot — normalize both shapes.
+function dialedMap(bean) {
+  if (!bean) return null;
+  if (bean.dialedByMethod) return bean.dialedByMethod;
+  if (bean.dialed) return { [bean.dialed.method || 'Brew']: bean.dialed };
+  return null;
+}
+
 // ── Brew timer utilities ──────────────────────────────────────────────────────
 function fmtSec(s) {
   const m = Math.floor(s/60), ss = Math.floor(s%60);
@@ -650,9 +659,8 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgai
   const handleDaySelect = day => { setFilterDay(day); setCalOpen(false); };
   const displayEntries = filterDay ? entries.filter(e=>e.date.startsWith(filterDay)) : entries;
   const groups = groupByDate(displayEntries);
-  const todayKey = new Date().toISOString().slice(0,10);
   const lastBrew = entries.find(e => e.type==='brew');
-  const showBrewAgain = lastBrew && !lastBrew.date.startsWith(todayKey);
+  const showBrewAgain = !!lastBrew;
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
       <div style={{ padding:'10px 16px 12px', background:P.bg,
@@ -724,7 +732,7 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgai
           {!calOpen && !filterDay && showBrewAgain && (
             <div style={{ background:'rgba(122,154,176,0.12)', border:'0.5px solid rgba(122,154,176,0.4)',
               borderRadius:12, padding:'12px 14px', margin:'10px 0 4px' }}>
-              <div style={{ fontSize:8, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', marginBottom:5 }}>MORNING BREW · LAST TIME</div>
+              <div style={{ fontSize:8, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', marginBottom:5 }}>LAST BREW</div>
               <div style={{ fontSize:16, fontWeight:500, color:P.headerText, fontFamily:'Cormorant Garamond, serif' }}>
                 {lastBrew.beanName||'Unnamed Brew'}
               </div>
@@ -829,13 +837,13 @@ function TimerScreen({ recipe, onCancel, onLog }) {
   const handleLog = () => onLog({
     id:genId(), date:new Date().toISOString(), type:'brew',
     beanName:recipe.beanName||'', roaster:recipe.roaster||'',
-    method:recipe.method||'', grinder:recipe.grinder||'', dose:recipe.dose||'', water:recipe.water||'',
+    method:recipe.method||'', grinder:recipe.grinder||'', machine:recipe.machine||'', dose:recipe.dose||'', water:recipe.water||'',
     temp:recipe.temp||'', brewTime:fmtSec(elapsed), grindSize:recipe.grindSize||'',
     ratio:recipe.ratio||'', tastingNotes:[], rating,
     whatIdChange:'', recipe:recipe.recipe||''
   });
 
-  const params = [['dose',recipe.dose],['water',recipe.water],['temp',recipe.temp],['grind',recipe.grindSize],['grinder',recipe.grinder],['ratio',recipe.ratio]].filter(([,v])=>v);
+  const params = [['dose',recipe.dose],['water',recipe.water],['temp',recipe.temp],['grind',recipe.grindSize],['grinder',recipe.grinder],['machine',recipe.machine],['ratio',recipe.ratio]].filter(([,v])=>v);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
@@ -965,33 +973,33 @@ const VIBE_TAGS     = ['Cozy','Busy','Quiet','Specialty','Work-friendly'];
 // starting settings (editable) · m: brew methods the gear maps to
 const GEAR_CATS = [['grinder','Grinder'],['brewer','Brewer'],['machine','Espresso Machine'],['kettle','Kettle'],['scale','Scale']];
 const GEAR_CATALOG = [
-  { c:'grinder', n:'Comandante C40',             adj:'clicks',   filter:'22–28',  esp:'8–12' },
-  { c:'grinder', n:'1Zpresso JX',                adj:'clicks',   filter:'60–75',  esp:'25–35' },
-  { c:'grinder', n:'1Zpresso JX-Pro',            adj:'clicks',   filter:'90–110', esp:'55–70' },
-  { c:'grinder', n:'1Zpresso K-Ultra',           adj:'dial',     filter:'7–9',    esp:'2.5–4' },
-  { c:'grinder', n:'1Zpresso Q2',                adj:'clicks',   filter:'18–24' },
-  { c:'grinder', n:'1Zpresso J-Max',             adj:'clicks',   filter:'70–90',  esp:'40–55' },
-  { c:'grinder', n:'Timemore C2',                adj:'clicks',   filter:'18–24',  esp:'10–14' },
-  { c:'grinder', n:'Timemore C3',                adj:'clicks',   filter:'18–24',  esp:'9–13' },
-  { c:'grinder', n:'Kingrinder K6',              adj:'clicks',   filter:'90–120', esp:'45–60' },
-  { c:'grinder', n:'Kingrinder K4',              adj:'clicks',   filter:'90–120', esp:'40–60' },
-  { c:'grinder', n:'Porlex Mini II',             adj:'clicks',   filter:'7–9' },
+  { c:'grinder', n:'Comandante C40',             adj:'clicks',   max:40,  filter:'22–28',  esp:'8–12' },
+  { c:'grinder', n:'1Zpresso JX',                adj:'clicks',   max:90,  filter:'60–75',  esp:'25–35' },
+  { c:'grinder', n:'1Zpresso JX-Pro',            adj:'clicks',   max:135, filter:'90–110', esp:'55–70' },
+  { c:'grinder', n:'1Zpresso K-Ultra',           adj:'dial',     max:10,  filter:'7–9',    esp:'2.5–4' },
+  { c:'grinder', n:'1Zpresso Q2',                adj:'clicks',   max:30,  filter:'18–24' },
+  { c:'grinder', n:'1Zpresso J-Max',             adj:'clicks',   max:120, filter:'70–90',  esp:'40–55' },
+  { c:'grinder', n:'Timemore C2',                adj:'clicks',   max:36,  filter:'18–24',  esp:'10–14' },
+  { c:'grinder', n:'Timemore C3',                adj:'clicks',   max:36,  filter:'18–24',  esp:'9–13' },
+  { c:'grinder', n:'Kingrinder K6',              adj:'clicks',   max:150, filter:'90–120', esp:'45–60' },
+  { c:'grinder', n:'Kingrinder K4',              adj:'clicks',   max:150, filter:'90–120', esp:'40–60' },
+  { c:'grinder', n:'Porlex Mini II',             adj:'clicks',   max:15,  filter:'7–9' },
   { c:'grinder', n:'Hario Skerton Pro',          adj:'stepless' },
-  { c:'grinder', n:'Baratza Encore',             adj:'dial',     filter:'14–20' },
-  { c:'grinder', n:'Baratza Encore ESP',         adj:'dial',     filter:'18–26',  esp:'6–12' },
-  { c:'grinder', n:'Baratza Virtuoso+',          adj:'dial',     filter:'12–18' },
-  { c:'grinder', n:'Baratza Sette 270',          adj:'dial',     esp:'4–9' },
-  { c:'grinder', n:'Baratza Vario+',             adj:'dial',     filter:'4–6',    esp:'1–3' },
-  { c:'grinder', n:'Fellow Ode Gen 2',           adj:'dial',     filter:'4–7' },
-  { c:'grinder', n:'Fellow Opus',                adj:'dial',     filter:'6–8',    esp:'1–3' },
-  { c:'grinder', n:'Niche Zero',                 adj:'dial',     filter:'35–50',  esp:'10–20' },
-  { c:'grinder', n:'DF64',                       adj:'dial',     filter:'50–70',  esp:'10–25' },
-  { c:'grinder', n:'Turin DF54',                 adj:'dial',     filter:'50–70',  esp:'15–30' },
+  { c:'grinder', n:'Baratza Encore',             adj:'dial',     max:40,  filter:'14–20' },
+  { c:'grinder', n:'Baratza Encore ESP',         adj:'dial',     max:40,  filter:'18–26',  esp:'6–12' },
+  { c:'grinder', n:'Baratza Virtuoso+',          adj:'dial',     max:40,  filter:'12–18' },
+  { c:'grinder', n:'Baratza Sette 270',          adj:'dial',     max:31,  esp:'4–9' },
+  { c:'grinder', n:'Baratza Vario+',             adj:'dial',     max:10,  filter:'4–6',    esp:'1–3' },
+  { c:'grinder', n:'Fellow Ode Gen 2',           adj:'dial',     max:11,  filter:'4–7' },
+  { c:'grinder', n:'Fellow Opus',                adj:'dial',     max:11,  filter:'6–8',    esp:'1–3' },
+  { c:'grinder', n:'Niche Zero',                 adj:'dial',     max:50,  filter:'35–50',  esp:'10–20' },
+  { c:'grinder', n:'DF64',                       adj:'dial',     max:90,  filter:'50–70',  esp:'10–25' },
+  { c:'grinder', n:'Turin DF54',                 adj:'dial',     max:90,  filter:'50–70',  esp:'15–30' },
   { c:'grinder', n:'Eureka Mignon Specialita',   adj:'stepless', esp:'start ~2 on dial' },
-  { c:'grinder', n:'Breville Smart Grinder Pro', adj:'dial',     filter:'35–45',  esp:'12–20' },
-  { c:'grinder', n:'Wilfa Uniform',              adj:'dial',     filter:'22–30' },
-  { c:'grinder', n:'Wilfa Svart',                adj:'dial',     filter:'12–15' },
-  { c:'grinder', n:'OXO Brew Conical Burr',      adj:'dial',     filter:'8–11' },
+  { c:'grinder', n:'Breville Smart Grinder Pro', adj:'dial',     max:60,  filter:'35–45',  esp:'12–20' },
+  { c:'grinder', n:'Wilfa Uniform',              adj:'dial',     max:41,  filter:'22–30' },
+  { c:'grinder', n:'Wilfa Svart',                adj:'dial',     max:17,  filter:'12–15' },
+  { c:'grinder', n:'OXO Brew Conical Burr',      adj:'dial',     max:15,  filter:'8–11' },
   { c:'grinder', n:'Mazzer Mini',                adj:'stepless' },
   { c:'brewer', n:'Hario V60',                 m:['V60'] },
   { c:'brewer', n:'Kalita Wave',               m:['Kalita Wave'] },
@@ -1035,20 +1043,26 @@ const GEAR_CATALOG = [
   { c:'scale', n:'Hario Drip Scale' },
 ];
 
-function QuickCaptureSheet({ onClose, onSave, onExpand }) {
+function QuickCaptureSheet({ onClose, onSave, onExpand, beans=[], gear=[] }) {
   const [type, setType]         = useState('cafe');
   const [cafeName, setCafeName] = useState('');
   const [drinkType, setDrink]   = useState('');
   const [beanName, setBean]     = useState('');
   const [method, setMethod]     = useState('');
   const [rating, setRating]     = useState(0);
+  const ownedMethods = [...new Set(gear.flatMap(g => g.m||[]))];
+  const [showAllMethods, setShowAllMethods] = useState(ownedMethods.length===0);
+  const methodChips = [...new Set([
+    ...ownedMethods,
+    ...(showAllMethods ? BREW_METHODS : []),
+    ...(method ? [method] : []) ])];
 
   const handleSave = () => {
     const base = { id:genId(), date:new Date().toISOString(), type, rating, tastingNotes:[], notes:'' };
     const entry = type==='cafe'
       ? { ...base, cafeName, drinkType, location:'', bean:'', price:'',
           ratings:{overall:rating,aroma:0,taste:0,texture:0}, vibeTags:[], wouldVisitAgain:false }
-      : { ...base, beanName, method, roaster:'', grinder:'', dose:'', water:'', temp:'',
+      : { ...base, beanName, method, roaster:'', grinder:'', machine:'', dose:'', water:'', temp:'',
           brewTime:'', grindSize:'', ratio:'', whatIdChange:'', recipe:'' };
     onSave(entry);
   };
@@ -1091,13 +1105,13 @@ function QuickCaptureSheet({ onClose, onSave, onExpand }) {
           </>
         ) : (
           <>
-            <div style={{ marginBottom:10 }}>
-              <div style={labelStyle}>Bean Name</div>
-              <div style={fieldStyle}><input placeholder="What are you brewing?" value={beanName} onChange={e=>setBean(e.target.value)} style={{ fontSize:13, color:G.text }} /></div>
-            </div>
+            <BeanPicker beans={beans} value={beanName} onChange={setBean} />
             <div style={{ marginBottom:10 }}>
               <div style={labelStyle}>Method</div>
-              <div style={fieldStyle}><input placeholder="V60, Espresso, Chemex…" value={method} onChange={e=>setMethod(e.target.value)} style={{ fontSize:13, color:G.text }} /></div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                {methodChips.map(m=><GhostChip key={m} label={m} active={method===m} onPress={()=>setMethod(method===m?'':m)} />)}
+                {!showAllMethods && <GhostChip label="+ more" onPress={()=>setShowAllMethods(true)} />}
+              </div>
             </div>
           </>
         )}
@@ -1193,12 +1207,14 @@ function CafeForm({ initial={}, onBack, onSave, onUpdate, customNotes=[], onAddN
 // ── Brew Full Form ────────────────────────────────────────────────────────────
 function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], gear=[], customNotes=[], onAddNote=()=>{} }) {
   const grinders     = gear.filter(g => g.c==='grinder');
+  const machines     = gear.filter(g => g.c==='machine');
   const ownedMethods = [...new Set(gear.flatMap(g => g.m||[]))];
-  const defaults = { beanName:'', roaster:'', method:'V60', grinder:'', dose:'', water:'',
+  const defaults = { beanName:'', roaster:'', method:'V60', grinder:'', machine:'', dose:'', water:'',
     temp:'', brewTime:'', grindSize:'', ratio:'', tastingNotes:[], rating:0, whatIdChange:'', recipe:'' };
   const initObj = { ...defaults,
     ...(ownedMethods.length && !initial.method  ? { method:  ownedMethods[0] } : {}),
     ...(grinders.length===1 && !initial.grinder ? { grinder: grinders[0].n }   : {}),
+    ...(machines.length===1 && !initial.machine ? { machine: machines[0].n }   : {}),
     ...initial };
   const [f, setF] = useState(initObj);
   const [showAllMethods, setShowAllMethods] = useState(ownedMethods.length===0);
@@ -1219,16 +1235,36 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
   const activeGrinder = grinders.find(g => g.n===f.grinder) || (grinders.length===1 ? grinders[0] : null);
   const isEsp = (f.method||'').toLowerCase().includes('espresso');
   const grindSuggestion = activeGrinder ? (isEsp ? activeGrinder.esp : activeGrinder.filter) : null;
-  const grindPh = activeGrinder
-    ? (activeGrinder.adj==='clicks' ? 'e.g. 24 clicks' : activeGrinder.adj==='dial' ? 'e.g. 6.5' : 'e.g. fine, medium')
-    : 'Medium-fine';
+  const grindMax = activeGrinder && (activeGrinder.adj==='clicks' || activeGrinder.adj==='dial') && activeGrinder.max > 0
+    ? activeGrinder.max : null;
+  const grindPh = grindMax ? `0–${grindMax}`
+    : activeGrinder
+      ? (activeGrinder.adj==='clicks' ? 'e.g. 24 clicks' : activeGrinder.adj==='dial' ? 'e.g. 6.5' : 'e.g. fine, medium')
+      : 'Medium-fine';
+  const clampGrind = v => {
+    if (v === '') { set('grindSize', ''); return; }
+    const n = parseFloat(v);
+    if (isNaN(n)) return;
+    set('grindSize', String(Math.min(grindMax, Math.max(0, n))));
+  };
   const visibleMethods = [...new Set([
     ...(showAllMethods ? [...BREW_METHODS, ...ownedMethods] : ownedMethods),
     ...(f.method ? [f.method] : []) ])];
 
-  const params = [['Dose (g)','dose','15g'],['Water (ml)','water','250ml'],
-    ['Water Temp','temp','92°C'],['Brew Time','brewTime','3:30'],
-    ['Grind Size','grindSize',grindPh],['Ratio','ratio','1:16']];
+  const bean = beans.find(b => b.name===f.beanName);
+  const dialed = !initial.id && bean ? (dialedMap(bean)||{})[f.method] : null;
+  const applyDialed = () => setF(p => ({ ...p,
+    grinder: dialed.grinder || p.grinder, machine: dialed.machine || p.machine,
+    dose: dialed.dose, water: dialed.water, temp: dialed.temp, brewTime: dialed.brewTime,
+    grindSize: dialed.grindSize, ratio: dialed.ratio, recipe: dialed.recipe || p.recipe }));
+
+  const params = isEsp
+    ? [['Dose (g)','dose','18g'],['Yield (g)','water','36g'],
+       ['Water Temp','temp','93°C'],['Shot Time','brewTime','28s'],
+       ['Grind Size','grindSize',grindPh],['Ratio','ratio','1:2']]
+    : [['Dose (g)','dose','15g'],['Water (ml)','water','250ml'],
+       ['Water Temp','temp','92°C'],['Brew Time','brewTime','3:30'],
+       ['Grind Size','grindSize',grindPh],['Ratio','ratio','1:16']];
 
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
@@ -1237,9 +1273,23 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
         <BeanPicker beans={beans} value={f.beanName} onChange={v=>set('beanName',v)}
           onBeanSelect={b=>setF(p=>({ ...p, beanName:b.name, roaster:b.roaster||p.roaster }))} />
         <GhostField label="Roaster" placeholder="Counter Culture, Intelligentsia…" value={f.roaster} onChange={v=>set('roaster',v)} />
+        {dialed && (
+          <div style={{ background:'rgba(122,154,176,0.10)', border:'0.5px solid rgba(122,154,176,0.35)',
+            borderRadius:12, padding:'11px 13px', marginBottom:14 }}>
+            <div style={{ fontSize:8, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', marginBottom:6 }}>★ DIALED IN · {f.method.toUpperCase()}</div>
+            <div style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, marginBottom:10 }}>
+              {[dialed.grindSize && `grind ${dialed.grindSize}`, dialed.dose && `dose ${dialed.dose}`,
+                dialed.water && `water ${dialed.water}`, dialed.brewTime && `time ${dialed.brewTime}`,
+                dialed.ratio].filter(Boolean).join(' · ') || 'recipe pinned'}
+            </div>
+            <div onClick={applyDialed} style={{ background:P.brew, borderRadius:9, padding:'9px', textAlign:'center', cursor:'pointer' }}>
+              <span style={{ fontSize:10, color:'#182635', fontFamily:'DM Mono, monospace' }}>use this recipe</span>
+            </div>
+          </div>
+        )}
         {(() => {
-          if (initial.id) return null;
-          const hist = entries.filter(e => e.type==='brew' && e.beanName && e.beanName===f.beanName);
+          if (initial.id || dialed) return null;
+          const hist = entries.filter(e => e.type==='brew' && e.beanName && e.beanName===f.beanName && e.method===f.method);
           return hist.length>0 ? <DialInPanel last={hist[0]} attempt={hist.length+1} grinder={activeGrinder} /> : null;
         })()}
         <div style={{ marginBottom:14 }}>
@@ -1260,6 +1310,14 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
             </div>
           </div>
         )}
+        {isEsp && machines.length>0 && (
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Machine</div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+              {machines.map(g=><GhostChip key={g.id} label={g.n} active={f.machine===g.n} onPress={()=>set('machine', f.machine===g.n?'':g.n)} />)}
+            </div>
+          </div>
+        )}
         <FormDivider />
         <SectionHead label="Parameters" />
         <div style={{ height:8 }} />
@@ -1268,7 +1326,11 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
             <div key={key}>
               <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' }}>{lbl}</div>
               <div style={{ height:40, background:G.surface, border:'1px solid '+G.border, borderRadius:10, display:'flex', alignItems:'center', padding:'0 12px' }}>
-                <input placeholder={ph} value={f[key]} onChange={e=>set(key,e.target.value)} style={{ fontSize:12, color:G.text }} />
+                {key==='grindSize' && grindMax
+                  ? <input type="number" inputMode="decimal" min={0} max={grindMax} step="any"
+                      placeholder={ph} value={f[key]} onChange={e=>clampGrind(e.target.value)}
+                      style={{ fontSize:12, color:G.text }} />
+                  : <input placeholder={ph} value={f[key]} onChange={e=>set(key,e.target.value)} style={{ fontSize:12, color:G.text }} />}
               </div>
             </div>
           ))}
@@ -1631,7 +1693,7 @@ function GearLocker({ gear, onChange }) {
                   <GhostChip key={a} label={a} active={g.adj===a} onPress={()=>update(g.id,'adj',a)} />
                 ))}
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
                 <div>
                   <div style={{ fontSize:8, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.08em' }}>Filter setting</div>
                   <input value={g.filter||''} placeholder="e.g. 22–28" onChange={e=>update(g.id,'filter',e.target.value)} style={smallInput} />
@@ -1639,6 +1701,11 @@ function GearLocker({ gear, onChange }) {
                 <div>
                   <div style={{ fontSize:8, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.08em' }}>Espresso setting</div>
                   <input value={g.esp||''} placeholder="e.g. 8–12" onChange={e=>update(g.id,'esp',e.target.value)} style={smallInput} />
+                </div>
+                <div>
+                  <div style={{ fontSize:8, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.08em' }}>Range max</div>
+                  <input type="number" value={g.max||''} placeholder="e.g. 40"
+                    onChange={e=>update(g.id,'max', e.target.value==='' ? '' : parseFloat(e.target.value))} style={smallInput} />
                 </div>
               </div>
             </div>
@@ -1818,7 +1885,7 @@ function BeanPicker({ beans=[], value='', onChange, onBeanSelect }) {
 }
 
 // ── Entry Detail ──────────────────────────────────────────────────────────────
-function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed }) {
+function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain, onStartTimer }) {
   const [pinned, setPinned] = useState(false);
   const isBrew = entry.type === 'brew';
   const canPin = isBrew && onPinDialed && beans.some(b => b.name===entry.beanName);
@@ -1887,14 +1954,24 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed }) {
             )}
             {entry.tastingNotes?.length>0 && (<><FormDivider /><SectionHead label="Tasting" /><div style={{height:6}}/><div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>{entry.tastingNotes.map(n=><GhostChip key={n} label={n} active />)}</div></>)}
             {entry.rating>0 && <div style={{marginBottom:10}}><div style={{fontSize:9,color:G.label,fontFamily:'DM Mono, monospace',marginBottom:6,letterSpacing:'0.1em',textTransform:'uppercase'}}>Rating</div><RatingSquares n={entry.rating} size={16} /></div>}
+            <div style={{ display:'flex', gap:8, marginTop:6, marginBottom:10 }}>
+              <div onClick={()=>onStartTimer && onStartTimer(entry)}
+                style={{ flex:1, background:P.brew, borderRadius:10, padding:'10px', textAlign:'center', cursor:'pointer' }}>
+                <span style={{ fontSize:10, color:'#182635', fontFamily:'DM Mono, monospace' }}>▶ brew with timer</span>
+              </div>
+              <div onClick={()=>onBrewAgain && onBrewAgain(entry)}
+                style={{ flex:1, border:'1px solid '+P.brew, borderRadius:10, padding:'10px', textAlign:'center', cursor:'pointer' }}>
+                <span style={{ fontSize:10, color:P.brew, fontFamily:'DM Mono, monospace' }}>↻ log again</span>
+              </div>
+            </div>
             {canPin && (
               <div onClick={()=>{ if(!pinned){ onPinDialed(entry); setPinned(true); } }}
-                style={{ marginTop:6, marginBottom:10, padding:'11px', borderRadius:10, textAlign:'center',
+                style={{ marginBottom:10, padding:'11px', borderRadius:10, textAlign:'center',
                   cursor: pinned ? 'default' : 'pointer',
                   background: pinned ? 'rgba(122,154,176,0.15)' : 'transparent',
                   border:'1px solid '+(pinned ? P.brew : G.chipBorder) }}>
                 <span style={{ fontSize:11, color: pinned ? P.brew : G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
-                  {pinned ? `✓ pinned as go-to recipe for ${entry.beanName}` : '★ pin as dialed-in recipe for this bean'}
+                  {pinned ? `✓ pinned as ${entry.method||'go-to'} recipe for ${entry.beanName}` : `★ pin as dialed-in ${entry.method||''} recipe`.replace('  ',' ')}
                 </span>
               </div>
             )}
@@ -1970,29 +2047,35 @@ function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow }) {
             <RatingSquares n={bean.rating} size={18} />
           </div>
         )}
-        {bean.dialed && (
-          <>
-            <FormDivider />
-            <div style={{ background:'rgba(122,154,176,0.10)', border:'0.5px solid rgba(122,154,176,0.35)',
-              borderRadius:12, padding:'12px 13px', marginBottom:14 }}>
-              <div style={{ fontSize:8, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', marginBottom:8 }}>★ DIALED-IN RECIPE</div>
-              <div style={{ display:'flex', flexWrap:'wrap', gap:'4px 14px', marginBottom:10 }}>
-                {[['Method',bean.dialed.method],['Grind',bean.dialed.grindSize],['Grinder',bean.dialed.grinder],
-                  ['Dose',bean.dialed.dose],['Water',bean.dialed.water],['Temp',bean.dialed.temp],
-                  ['Time',bean.dialed.brewTime],['Ratio',bean.dialed.ratio]].filter(([,v])=>v).map(([l,v])=>(
-                  <div key={l}>
-                    <span style={{ fontSize:7.5, color:G.label, fontFamily:'DM Mono, monospace', textTransform:'uppercase', letterSpacing:'0.08em' }}>{l} </span>
-                    <span style={{ fontSize:11, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{v}</span>
+        {(() => {
+          const dm = dialedMap(bean);
+          if (!dm || !Object.keys(dm).length) return null;
+          return (
+            <>
+              <FormDivider />
+              {Object.entries(dm).map(([method, d]) => (
+                <div key={method} style={{ background:'rgba(122,154,176,0.10)', border:'0.5px solid rgba(122,154,176,0.35)',
+                  borderRadius:12, padding:'12px 13px', marginBottom:14 }}>
+                  <div style={{ fontSize:8, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', marginBottom:8 }}>★ DIALED IN · {method.toUpperCase()}</div>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:'4px 14px', marginBottom:10 }}>
+                    {[['Grind',d.grindSize],['Grinder',d.grinder],['Machine',d.machine],
+                      ['Dose',d.dose],['Water',d.water],['Temp',d.temp],
+                      ['Time',d.brewTime],['Ratio',d.ratio]].filter(([,v])=>v).map(([l,v])=>(
+                      <div key={l}>
+                        <span style={{ fontSize:7.5, color:G.label, fontFamily:'DM Mono, monospace', textTransform:'uppercase', letterSpacing:'0.08em' }}>{l} </span>
+                        <span style={{ fontSize:11, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{v}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <div onClick={()=>onBrewNow && onBrewNow({ ...bean.dialed, beanName:bean.name, roaster:bean.roaster||'' })}
-                style={{ background:P.brew, borderRadius:9, padding:'10px', textAlign:'center', cursor:'pointer' }}>
-                <span style={{ fontSize:11, color:'#182635', fontFamily:'DM Mono, monospace' }}>▶ brew now</span>
-              </div>
-            </div>
-          </>
-        )}
+                  <div onClick={()=>onBrewNow && onBrewNow({ ...d, method, beanName:bean.name, roaster:bean.roaster||'' })}
+                    style={{ background:P.brew, borderRadius:9, padding:'10px', textAlign:'center', cursor:'pointer' }}>
+                    <span style={{ fontSize:11, color:'#182635', fontFamily:'DM Mono, monospace' }}>▶ brew now</span>
+                  </div>
+                </div>
+              ))}
+            </>
+          );
+        })()}
         {attempts.length>0 && (
           <>
             <FormDivider />
@@ -2053,11 +2136,14 @@ function App() {
 
   const brewAgain  = src => saveEntry({ ...src, id:genId(), date:new Date().toISOString() });
   const startTimer = r => { setTimerRecipe(r); setView('brew-timer'); };
-  const pinDialed  = entry => setBeans(prev => prev.map(b => b.name===entry.beanName
-    ? { ...b, dialed:{ method:entry.method||'', grinder:entry.grinder||'', dose:entry.dose||'', water:entry.water||'',
-        temp:entry.temp||'', brewTime:entry.brewTime||'', grindSize:entry.grindSize||'',
-        ratio:entry.ratio||'', recipe:entry.recipe||'' } }
-    : b));
+  const pinDialed  = entry => setBeans(prev => prev.map(b => {
+    if (b.name !== entry.beanName) return b;
+    const snap = { method:entry.method||'', grinder:entry.grinder||'', machine:entry.machine||'',
+      dose:entry.dose||'', water:entry.water||'', temp:entry.temp||'', brewTime:entry.brewTime||'',
+      grindSize:entry.grindSize||'', ratio:entry.ratio||'', recipe:entry.recipe||'' };
+    return { ...b, dialed:undefined,
+      dialedByMethod:{ ...(dialedMap(b)||{}), [entry.method||'Brew']: snap } };
+  }));
 
   const sp = { onTab:goTab, onAdd:()=>setSheet(true) };
 
@@ -2067,7 +2153,7 @@ function App() {
       {view==='beans'        && <BeanLibrary   beans={beans} {...sp} onAddBean={()=>setView('add-bean')} onBeanPress={b=>{ setSelBean(b); setView('bean-detail'); }} />}
       {view==='stats'        && <StatsDash     entries={entries} {...sp} />}
       {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} gear={gear} onGearChange={setGear} />}
-      {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} beans={beans} onPinDialed={pinDialed} />}
+      {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} beans={beans} onPinDialed={pinDialed} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
       {view==='bean-detail'  && selectedBean  && <BeanDetail  bean={selectedBean}  onBack={()=>setView('beans')} onEdit={()=>{ setInit(selectedBean); setView('bean-form-edit'); }} entries={entries} onBrewNow={startTimer} />}
       {view==='brew-timer'   && timerRecipe   && <TimerScreen recipe={timerRecipe} onCancel={()=>setView('home')} onLog={saveEntry} />}
       {view==='cafe-form'    && <CafeForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   customNotes={customNotes} onAddNote={setCustomNotes} customDrinks={customDrinks} onAddDrink={setCustomDrinks} />}
@@ -2076,7 +2162,7 @@ function App() {
       {view==='brew-form-edit'&& <BrewForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} beans={beans} entries={entries} gear={gear} customNotes={customNotes} onAddNote={setCustomNotes} />}
       {view==='add-bean'     && <AddBeanForm onBack={()=>setView('beans')} onSave={b=>{ setBeans([b,...beans]); setView('beans'); }} />}
       {view==='bean-form-edit'&& <AddBeanForm initial={formInit} onBack={()=>setView('bean-detail')} onUpdate={updateBean} />}
-      {showSheet && <QuickCaptureSheet onClose={()=>setSheet(false)} onSave={saveEntry} onExpand={expand} />}
+      {showSheet && <QuickCaptureSheet onClose={()=>setSheet(false)} onSave={saveEntry} onExpand={expand} beans={beans} gear={gear} />}
     </div>
   );
 }
