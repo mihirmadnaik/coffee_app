@@ -253,8 +253,9 @@ async function flushShareQueue() {
         Authorization:'Bearer '+COMMUNITY_SUBMIT.key, Prefer:'return=minimal' },
       body: JSON.stringify(q.map(s => ({ type:s.type, payload:s.payload, client_at:s.at })))
     });
-    if (r.ok) localStorage.setItem('share_queue', '[]');
-  } catch {}
+    if (r.ok) { localStorage.setItem('share_queue', '[]'); }
+    else { const body = await r.text().catch(()=>'') ; console.warn('[community] submit failed', r.status, body); }
+  } catch (e) { console.warn('[community] submit error', e); }
 }
 
 function useCommunity() {
