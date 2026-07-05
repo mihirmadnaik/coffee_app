@@ -292,6 +292,89 @@ function useCommunity() {
   return lib;
 }
 
+// ── Cloud sync engine ─────────────────────────────────────────────────────────
+// Local-first: localStorage stays the working store; the cloud is a replica.
+// Each sync diffs current state against a per-user "shadow" of the last synced
+// state, pushes changed rows to user_data, and pulls remote changes. Records
+// merge as a union across devices; for the same record edited in two places,
+// last write wins — and this device's unsynced edits win over remote ones.
+function syncSplitKey(k) { const i = k.indexOf(':'); return [k.slice(0,i), k.slice(i+1)]; }
+
+function syncSnapshot(cols) {
+  const m = {};
+  cols.entries.forEach(e => { if (e && e.id) m['entry:'+e.id] = JSON.stringify(e); });
+  cols.beans.forEach(b =>   { if (b && b.id) m['bean:'+b.id]  = JSON.stringify(b); });
+  cols.gear.forEach(g =>    { if (g && g.id) m['gear:'+g.id]  = JSON.stringify(g); });
+  m['setting:custom_notes']  = JSON.stringify(cols.customNotes);
+  m['setting:custom_drinks'] = JSON.stringify(cols.customDrinks);
+  return m;
+}
+
+function syncDiff(shadow, snap) {
+  const rows = [], now = new Date().toISOString();
+  for (const k in snap) if (shadow[k] !== snap[k]) {
+    const [kind, id] = syncSplitKey(k);
+    rows.push({ id, kind, payload: JSON.parse(snap[k]), updated_at: now, deleted: false });
+  }
+  for (const k in shadow) if (!(k in snap)) {
+    const [kind, id] = syncSplitKey(k);
+    rows.push({ id, kind, payload: {}, updated_at: now, deleted: true });
+  }
+  return rows;
+}
+
+function syncApplyRemote(rows, pendingKeys, cols) {
+  let changed = false;
+  const maps = {
+    entry: new Map(cols.entries.map(e => [e.id, e])),
+    bean:  new Map(cols.beans.map(b => [b.id, b])),
+    gear:  new Map(cols.gear.map(g => [g.id, g])),
+  };
+  let notes = cols.customNotes, drinks = cols.customDrinks;
+  rows.forEach(r => {
+    if (pendingKeys.has(r.kind+':'+r.id)) return;   // this device's unsynced edit wins
+    if (r.kind === 'setting') {
+      const arr = Array.isArray(r.payload) ? r.payload : [];
+      if (r.id === 'custom_notes') {
+        const u = [...new Set([...notes, ...arr])];
+        if (u.length !== notes.length) { notes = u; changed = true; }
+      } else if (r.id === 'custom_drinks') {
+        const u = [...new Set([...drinks, ...arr])];
+        if (u.length !== drinks.length) { drinks = u; changed = true; }
+      }
+      return;
+    }
+    const map = maps[r.kind];
+    if (!map) return;
+    if (r.deleted) { if (map.delete(r.id)) changed = true; return; }
+    const cur = map.get(r.id);
+    if (!cur || JSON.stringify(cur) !== JSON.stringify(r.payload)) { map.set(r.id, r.payload); changed = true; }
+  });
+  const entries = [...maps.entry.values()].sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  return { changed, cols: { entries, beans:[...maps.bean.values()], gear:[...maps.gear.values()],
+    customNotes: notes, customDrinks: drinks } };
+}
+
+async function syncPullAll(since) {
+  const out = [], seen = new Set();
+  let cursor = since;
+  for (let page = 0; page < 20; page++) {
+    const { data, error } = await SB.from('user_data')
+      .select('id,kind,payload,updated_at,deleted')
+      .gte('updated_at', cursor)
+      .order('updated_at', { ascending: true })
+      .limit(1000);
+    if (error) throw error;
+    data.forEach(r => {
+      const k = r.kind + ':' + r.id + ':' + r.updated_at;
+      if (!seen.has(k)) { seen.add(k); out.push(r); }
+    });
+    if (data.length < 1000) break;
+    cursor = data[data.length - 1].updated_at;
+  }
+  return out;
+}
+
 // ── Shared primitives ────────────────────────────────────────────────────────
 
 function RatingSquares({ n=0, size=18, onChange }) {
@@ -1899,7 +1982,7 @@ function GearLocker({ gear, onChange, catalog=GEAR_CATALOG }) {
 }
 
 // ── Account (Supabase auth, email + password) ────────────────────────────────
-function AccountCard({ session }) {
+function AccountCard({ session, syncState, lastSyncAt, onSync }) {
   const [mode, setMode]   = useState('signin'); // signin | signup
   const [email, setEmail] = useState('');
   const [pw, setPw]       = useState('');
@@ -1930,12 +2013,23 @@ function AccountCard({ session }) {
           <div style={{ fontSize:11, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
             signed in as <span style={{ color:P.cafe }}>{session.user.email}</span>
           </div>
-          <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4, lineHeight:1.6 }}>
-            cloud backup & sync arrives in the next update — your data is safe on this device meanwhile
+          <div style={{ fontSize:9, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4, lineHeight:1.6,
+            color: syncState==='error' ? P.cafe : P.headerMuted }}>
+            {syncState==='syncing' ? '↻ syncing…'
+              : syncState==='error' ? 'sync failed — check connection & retry'
+              : lastSyncAt ? '✓ synced '+formatTime(lastSyncAt.toISOString())
+              : 'waiting for first sync…'}
           </div>
-          <div onClick={()=>SB.auth.signOut()}
-            style={{ marginTop:10, border:'1px solid '+G.chipBorder, borderRadius:9, padding:'8px', textAlign:'center', cursor:'pointer' }}>
-            <span style={{ fontSize:10, color:G.label, fontFamily:'DM Mono, monospace' }}>sign out</span>
+          <div style={{ display:'flex', gap:8, marginTop:10 }}>
+            <div onClick={onSync}
+              style={{ flex:1, border:'1px solid '+P.brew, borderRadius:9, padding:'8px', textAlign:'center',
+                cursor:'pointer', opacity: syncState==='syncing'?0.5:1 }}>
+              <span style={{ fontSize:10, color:P.brew, fontFamily:'DM Mono, monospace' }}>sync now</span>
+            </div>
+            <div onClick={()=>SB.auth.signOut()}
+              style={{ flex:1, border:'1px solid '+G.chipBorder, borderRadius:9, padding:'8px', textAlign:'center', cursor:'pointer' }}>
+              <span style={{ fontSize:10, color:G.label, fontFamily:'DM Mono, monospace' }}>sign out</span>
+            </div>
           </div>
         </>
       ) : (
@@ -1970,7 +2064,7 @@ function AccountCard({ session }) {
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, gearCatalog=GEAR_CATALOG, session }) {
+function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, gearCatalog=GEAR_CATALOG, session, syncState, lastSyncAt, onSync }) {
   const total = entries.length;
   const cafe  = entries.filter(e=>e.type==='cafe').length;
   const brew  = entries.filter(e=>e.type==='brew').length;
@@ -1985,7 +2079,7 @@ function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, ge
         <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4 }}>Your personal coffee journal</div>
       </div>
       <div className="scroll-y" style={{ flex:1, padding:'0 16px' }}>
-        <AccountCard session={session} />
+        <AccountCard session={session} syncState={syncState} lastSyncAt={lastSyncAt} onSync={onSync} />
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:16 }}>
           {[['Total',total],['Café',cafe],['Brews',brew]].map(([l,v])=>(
             <div key={l} style={{ background:P.cardBg2, border:'0.5px solid '+P.cardStroke,
@@ -2373,6 +2467,108 @@ function App() {
     const { data: sub } = SB.auth.onAuthStateChange((_evt, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // ── Cloud sync orchestration ──
+  const [syncState, setSyncState]   = useState('idle'); // idle | syncing | error
+  const [lastSyncAt, setLastSyncAt] = useState(null);
+  const syncBusyRef  = useRef(false);
+  const syncAgainRef = useRef(false);
+  const syncTimerRef = useRef(null);
+  const stateRef = useRef({});
+  stateRef.current = { entries, beans, gear, customNotes, customDrinks, session };
+
+  const doSync = useCallback(async () => {
+    const s = stateRef.current.session;
+    if (!SB || !s) return;
+    if (syncBusyRef.current) { syncAgainRef.current = true; return; }
+    syncBusyRef.current = true;
+    setSyncState('syncing');
+    try {
+      const uid = s.user.id;
+      const shadowKey = 'sync_shadow_'+uid, cursorKey = 'sync_pull_'+uid;
+      let shadow = null;
+      try { shadow = JSON.parse(localStorage.getItem(shadowKey)); } catch {}
+      let lastPull = localStorage.getItem(cursorKey) || '1970-01-01T00:00:00Z';
+      let cols = { entries: stateRef.current.entries, beans: stateRef.current.beans,
+        gear: stateRef.current.gear, customNotes: stateRef.current.customNotes,
+        customDrinks: stateRef.current.customDrinks };
+
+      if (!shadow) {
+        // First sync for this account on this device
+        const all = await syncPullAll('1970-01-01T00:00:00Z');
+        const remoteCols = syncApplyRemote(all, new Set(),
+          { entries:[], beans:[], gear:[], customNotes:[], customDrinks:[] }).cols;
+        const remoteLive = all.filter(r => !r.deleted && r.kind !== 'setting');
+        const localCount = cols.entries.length + cols.beans.length + cols.gear.length;
+        let discard = false;
+        if (localCount > 0 && remoteLive.length > 0) {
+          discard = !window.confirm(
+            'This device has '+localCount+' local item(s) and your account already has cloud data.\n\n'+
+            'OK = merge local items into your account\n'+
+            'Cancel = discard local items and load your account data');
+        }
+        // Shadow starts as the remote state, so local extras become pending pushes
+        shadow = syncSnapshot(remoteCols);
+        if (discard) {
+          // Take the cloud state wholesale — nothing local survives, nothing is pushed
+          cols = remoteCols;
+        } else {
+          const pending = new Set(syncDiff(shadow, syncSnapshot(cols)).map(r => r.kind+':'+r.id));
+          cols = syncApplyRemote(all, pending, cols).cols;
+        }
+        if (all.length) lastPull = all[all.length-1].updated_at;
+      } else {
+        const rows = await syncPullAll(lastPull);
+        if (rows.length) {
+          const pending = new Set(syncDiff(shadow, syncSnapshot(cols)).map(r => r.kind+':'+r.id));
+          cols = syncApplyRemote(rows, pending, cols).cols;
+          lastPull = rows[rows.length-1].updated_at;
+        }
+      }
+
+      // Push everything that changed locally since the shadow
+      const snap = syncSnapshot(cols);
+      const changes = syncDiff(shadow, snap);
+      for (let i = 0; i < changes.length; i += 200) {
+        const { error } = await SB.from('user_data')
+          .upsert(changes.slice(i, i+200), { onConflict: 'user_id,id' });
+        if (error) throw error;
+      }
+      if (changes.length) lastPull = changes.reduce((m,r) => r.updated_at > m ? r.updated_at : m, lastPull);
+
+      // Commit: shadow, pull cursor, and any merged-in remote data
+      localStorage.setItem(shadowKey, JSON.stringify(snap));
+      localStorage.setItem(cursorKey, lastPull);
+      const cur = stateRef.current;
+      if (JSON.stringify(cols.entries)      !== JSON.stringify(cur.entries))      setEntries(cols.entries);
+      if (JSON.stringify(cols.beans)        !== JSON.stringify(cur.beans))        setBeans(cols.beans);
+      if (JSON.stringify(cols.gear)         !== JSON.stringify(cur.gear))         setGear(cols.gear);
+      if (JSON.stringify(cols.customNotes)  !== JSON.stringify(cur.customNotes))  setCustomNotes(cols.customNotes);
+      if (JSON.stringify(cols.customDrinks) !== JSON.stringify(cur.customDrinks)) setCustomDrinks(cols.customDrinks);
+      setSyncState('idle');
+      setLastSyncAt(new Date());
+    } catch (e) {
+      console.warn('[sync] failed', e);
+      setSyncState('error');
+    } finally {
+      syncBusyRef.current = false;
+      if (syncAgainRef.current) { syncAgainRef.current = false; doSync(); }
+    }
+  }, []);
+
+  // Sync on sign-in (and when the signed-in user changes)
+  useEffect(() => {
+    if (!session) { setSyncState('idle'); return; }
+    doSync();
+  }, [session?.user?.id]);
+
+  // Debounced sync after local changes
+  useEffect(() => {
+    if (!session) return;
+    clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(doSync, 3500);
+    return () => clearTimeout(syncTimerRef.current);
+  }, [entries, beans, gear, customNotes, customDrinks]);
   const gearCatalog = [...GEAR_CATALOG, ...community.gear.filter(g =>
     g && g.n && !GEAR_CATALOG.some(c => c.n.toLowerCase()===g.n.toLowerCase()))];
   const [view,    setView]          = useState('home');
@@ -2418,7 +2614,7 @@ function App() {
       {view==='home'         && <HomeScreen    entries={entries} {...sp} onEntryPress={e=>{ setSelEntry(e); setView('entry-detail'); }} onLogCafe={p=>{ setInit(p); setView('cafe-form'); }} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
       {view==='beans'        && <BeanLibrary   beans={beans} {...sp} onAddBean={()=>setView('add-bean')} onBeanPress={b=>{ setSelBean(b); setView('bean-detail'); }} />}
       {view==='stats'        && <StatsDash     entries={entries} {...sp} />}
-      {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} gear={gear} onGearChange={setGear} gearCatalog={gearCatalog} session={session} />}
+      {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} gear={gear} onGearChange={setGear} gearCatalog={gearCatalog} session={session} syncState={syncState} lastSyncAt={lastSyncAt} onSync={doSync} />}
       {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} beans={beans} onPinDialed={pinDialed} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
       {view==='bean-detail'  && selectedBean  && <BeanDetail  bean={selectedBean}  onBack={()=>setView('beans')} onEdit={()=>{ setInit(selectedBean); setView('bean-form-edit'); }} entries={entries} onBrewNow={startTimer} communityRecipes={community.recipes} />}
       {view==='brew-timer'   && timerRecipe   && <TimerScreen recipe={timerRecipe} onCancel={()=>setView('home')} onLog={saveEntry} />}
