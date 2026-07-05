@@ -1898,30 +1898,27 @@ function GearLocker({ gear, onChange, catalog=GEAR_CATALOG }) {
   );
 }
 
-// ── Account (Supabase auth, email + one-time code) ───────────────────────────
+// ── Account (Supabase auth, email + password) ────────────────────────────────
 function AccountCard({ session }) {
+  const [mode, setMode]   = useState('signin'); // signin | signup
   const [email, setEmail] = useState('');
-  const [code, setCode]   = useState('');
-  const [stage, setStage] = useState('idle'); // idle | busy | sent | verifying
+  const [pw, setPw]       = useState('');
+  const [busy, setBusy]   = useState(false);
   const [err, setErr]     = useState('');
   if (!SB) return null;
 
   const inputStyle = { fontSize:11, color:G.text, background:G.surface, border:'1px solid '+G.border,
     borderRadius:10, padding:'10px 12px', fontFamily:'DM Mono, monospace', fontWeight:300 };
 
-  const sendCode = async () => {
+  const submit = async () => {
     const em = email.trim().toLowerCase();
     if (!em.includes('@')) { setErr('enter a valid email'); return; }
-    setStage('busy'); setErr('');
-    const { error } = await SB.auth.signInWithOtp({ email: em, options:{ shouldCreateUser:true } });
-    if (error) { setErr(error.message); setStage('idle'); }
-    else setStage('sent');
-  };
-  const verify = async () => {
-    if (!code.trim()) return;
-    setStage('verifying'); setErr('');
-    const { error } = await SB.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code.trim(), type:'email' });
-    if (error) { setErr(error.message); setStage('sent'); }
+    if (pw.length < 6) { setErr('password must be at least 6 characters'); return; }
+    setBusy(true); setErr('');
+    const fn = mode==='signup' ? 'signUp' : 'signInWithPassword';
+    const { error } = await SB.auth[fn]({ email: em, password: pw });
+    setBusy(false);
+    if (error) setErr(error.message.toLowerCase());
     // on success onAuthStateChange updates session and this card re-renders signed-in
   };
 
@@ -1941,38 +1938,28 @@ function AccountCard({ session }) {
             <span style={{ fontSize:10, color:G.label, fontFamily:'DM Mono, monospace' }}>sign out</span>
           </div>
         </>
-      ) : stage==='sent' || stage==='verifying' ? (
-        <>
-          <div style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, marginBottom:8, lineHeight:1.6 }}>
-            we emailed a 6-digit code to <span style={{ color:P.cafe }}>{email.trim().toLowerCase()}</span>
-          </div>
-          <input inputMode="numeric" placeholder="123456" value={code}
-            onChange={e=>setCode(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') verify(); }}
-            style={{ ...inputStyle, marginBottom:8, letterSpacing:'0.3em', textAlign:'center', fontSize:15 }} />
-          <div onClick={verify} style={{ background:P.cafe, borderRadius:9, padding:'10px', textAlign:'center',
-            cursor:'pointer', opacity: stage==='verifying'?0.6:1 }}>
-            <span style={{ fontSize:10, color:'#182635', fontFamily:'DM Mono, monospace' }}>
-              {stage==='verifying' ? 'verifying…' : 'verify & sign in'}
-            </span>
-          </div>
-          <div onClick={()=>{ setStage('idle'); setCode(''); setErr(''); }}
-            style={{ marginTop:8, textAlign:'center', cursor:'pointer' }}>
-            <span style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>← different email</span>
-          </div>
-          {err && <div style={{ fontSize:9, color:P.cafe, fontFamily:'DM Mono, monospace', marginTop:8, textAlign:'center' }}>{err}</div>}
-        </>
       ) : (
         <>
           <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginBottom:8, lineHeight:1.6 }}>
-            sign in to back up your diary & sync across devices
+            {mode==='signup' ? 'create an account to back up your diary & sync across devices' : 'sign in to your account'}
           </div>
-          <input type="email" inputMode="email" placeholder="you@example.com" value={email}
-            onChange={e=>setEmail(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') sendCode(); }}
-            style={{ ...inputStyle, marginBottom:8 }} />
-          <div onClick={sendCode} style={{ background:P.cafe, borderRadius:9, padding:'10px', textAlign:'center',
-            cursor:'pointer', opacity: stage==='busy'?0.6:1 }}>
+          <input type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={email}
+            onChange={e=>setEmail(e.target.value)}
+            style={{ ...inputStyle, marginBottom:8, width:'100%' }} />
+          <input type="password" autoComplete={mode==='signup'?'new-password':'current-password'}
+            placeholder="password" value={pw}
+            onChange={e=>setPw(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') submit(); }}
+            style={{ ...inputStyle, marginBottom:8, width:'100%' }} />
+          <div onClick={busy?undefined:submit} style={{ background:P.cafe, borderRadius:9, padding:'10px', textAlign:'center',
+            cursor:'pointer', opacity: busy?0.6:1 }}>
             <span style={{ fontSize:10, color:'#182635', fontFamily:'DM Mono, monospace' }}>
-              {stage==='busy' ? 'sending…' : 'email me a sign-in code'}
+              {busy ? 'please wait…' : mode==='signup' ? 'create account' : 'sign in'}
+            </span>
+          </div>
+          <div onClick={()=>{ setMode(mode==='signup'?'signin':'signup'); setErr(''); }}
+            style={{ marginTop:8, textAlign:'center', cursor:'pointer' }}>
+            <span style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>
+              {mode==='signup' ? 'already have an account? sign in' : 'new here? create an account'}
             </span>
           </div>
           {err && <div style={{ fontSize:9, color:P.cafe, fontFamily:'DM Mono, monospace', marginTop:8, textAlign:'center' }}>{err}</div>}
