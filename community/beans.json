@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "updated": "2026-07-03",
+  "items": [
+    { "name": "Hair Bender",                "roaster": "Stumptown",       "process": "Washed",  "roastLevel": 5 },
+    { "name": "Big Trouble",                "roaster": "Counter Culture", "process": "Washed",  "roastLevel": 5 },
+    { "name": "Black Cat Classic Espresso", "roaster": "Intelligentsia",  "process": "Washed",  "roastLevel": 7 },
+    { "name": "Bella Donovan",              "roaster": "Blue Bottle",     "process": "Natural", "roastLevel": 6 },
+    { "name": "Geometry",                   "roaster": "Onyx Coffee Lab", "process": "Washed",  "roastLevel": 3 },
+    { "name": "Monarch",                    "roaster": "Onyx Coffee Lab", "process": "Natural", "roastLevel": 8 },
+    { "name": "Hologram",                   "roaster": "Counter Culture", "process": "Washed",  "roastLevel": 4 },
+    { "name": "Giant Steps",                "roaster": "Blue Bottle",     "process": "Washed",  "roastLevel": 8 },
+    { "name": "Velvet Blaze",               "roaster": "Summer Moon",     "process": "Washed",  "roastLevel": 6 }
+  ]
+}
