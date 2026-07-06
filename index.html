@@ -194,6 +194,27 @@ function loadLeaflet() {
   });
 }
 
+// Downscale a photo to maxDim px (long edge) and return a JPEG data URL.
+// Keeps vision-API token cost low: a 12MP bag photo becomes ~1MP.
+function downscaleImage(file, maxDim = 1024) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(c.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('could not read image')); };
+    img.src = url;
+  });
+}
+
 async function fetchNearbyCafes(lat, lon) {
   const q = `[out:json][timeout:15];(
     node["amenity"="cafe"](around:1200,${lat},${lon});
@@ -1524,10 +1545,35 @@ function BeanAvatar({ color }) {
   );
 }
 
-function AddBeanForm({ initial={}, onBack, onSave, onUpdate, communityBeans=[] }) {
+function AddBeanForm({ initial={}, onBack, onSave, onUpdate, communityBeans=[], session }) {
   const [f, setF] = useState({ name:'', roaster:'', process:'Washed', roastLevel:0, rating:0, ...initial });
   const [share, setShare] = useState(false);
   const [suggestOff, setSuggestOff] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanErr, setScanErr]   = useState('');
+  const fileRef = useRef(null);
+
+  const handleScan = async file => {
+    setScanning(true); setScanErr('');
+    try {
+      const dataUrl = await downscaleImage(file, 1024);
+      const { data, error } = await SB.functions.invoke('scan-bean', { body: { image: dataUrl } });
+      if (error) throw new Error(error.message || 'request failed');
+      if (data && data.error) throw new Error(data.error);
+      const p = data || {};
+      const proc = ['Washed','Natural','Honey'].find(x => (p.process||'').toLowerCase().includes(x.toLowerCase()));
+      setF(prev => ({ ...prev,
+        name:    p.name    || prev.name,
+        roaster: p.roaster || prev.roaster,
+        process: proc || prev.process,
+        roastLevel: (p.roastLevel >= 1 && p.roastLevel <= 10) ? Math.round(p.roastLevel) : prev.roastLevel }));
+      setSuggestOff(true);
+      if (!p.name && !p.roaster) setScanErr("couldn't read the label — try a straighter, brighter shot");
+    } catch (e) {
+      console.warn('[scan]', e);
+      setScanErr('scan failed — ' + (e.message || 'try again'));
+    } finally { setScanning(false); }
+  };
   const initStr = useRef(JSON.stringify({ name:'', roaster:'', process:'Washed', roastLevel:0, rating:0, ...initial }));
   const set = (k,v) => setF(p=>({...p,[k]:v}));
   const hasChanges = JSON.stringify(f) !== initStr.current;
@@ -1551,6 +1597,25 @@ function AddBeanForm({ initial={}, onBack, onSave, onUpdate, communityBeans=[] }
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
       <NavBar title={initial.id ? 'Edit Bean' : 'Add Bean'} onBack={handleBack} onSave={handleSave} />
       <div className="scroll-y" style={{ flex:1, padding:'14px 16px' }}>
+        {!initial.id && SB && (
+          <div style={{ marginBottom:14 }}>
+            <input ref={fileRef} type="file" accept="image/*" capture="environment"
+              style={{ display:'none' }}
+              onChange={e=>{ const file = e.target.files && e.target.files[0]; if (file) handleScan(file); e.target.value=''; }} />
+            <div onClick={()=>{
+                if (scanning) return;
+                if (!session) { setScanErr('sign in on the Profile tab to use scanning'); return; }
+                setScanErr(''); fileRef.current && fileRef.current.click();
+              }}
+              style={{ border:'1px dashed '+(scanning ? P.cafe : G.chipBorder), borderRadius:10,
+                padding:'12px', textAlign:'center', cursor:'pointer' }}>
+              <span style={{ fontSize:11, color: scanning ? P.cafe : G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+                {scanning ? '☕ reading the label…' : '📷 scan the bag — auto-fill details'}
+              </span>
+            </div>
+            {scanErr && <div style={{ fontSize:9, color:P.cafe, fontFamily:'DM Mono, monospace', marginTop:6, textAlign:'center' }}>{scanErr}</div>}
+          </div>
+        )}
         <div style={{ marginBottom:12 }}>
           <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace',
             marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' }}>Bean Name</div>
@@ -2622,7 +2687,7 @@ function App() {
       {view==='brew-form'    && <BrewForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   beans={beans} entries={entries} gear={gear} customNotes={customNotes} onAddNote={setCustomNotes} />}
       {view==='cafe-form-edit'&& <CafeForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} customNotes={customNotes} onAddNote={setCustomNotes} customDrinks={customDrinks} onAddDrink={setCustomDrinks} />}
       {view==='brew-form-edit'&& <BrewForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} beans={beans} entries={entries} gear={gear} customNotes={customNotes} onAddNote={setCustomNotes} />}
-      {view==='add-bean'     && <AddBeanForm onBack={()=>setView('beans')} onSave={b=>{ setBeans([b,...beans]); setView('beans'); }} communityBeans={community.beans} />}
+      {view==='add-bean'     && <AddBeanForm onBack={()=>setView('beans')} onSave={b=>{ setBeans([b,...beans]); setView('beans'); }} communityBeans={community.beans} session={session} />}
       {view==='bean-form-edit'&& <AddBeanForm initial={formInit} onBack={()=>setView('bean-detail')} onUpdate={updateBean} />}
       {showSheet && <QuickCaptureSheet onClose={()=>setSheet(false)} onSave={saveEntry} onExpand={expand} beans={beans} gear={gear} />}
     </div>
