@@ -61,10 +61,35 @@ const BEAN_SCHEMA = {
   additionalProperties: false,
 };
 
-const PROMPT =
-  "This is a photo of a coffee bean bag. Extract the label information into " +
-  "the requested fields. Use an empty string, 0, or [] for anything not " +
-  "visible or not legible — do not guess values that aren't on the bag.";
+// Fallbacks when the app doesn't pass its (community-reviewed) vocabulary.
+const DEFAULT_PROCESSES = ["Washed", "Natural", "Honey", "Anaerobic"];
+const DEFAULT_NOTES = [
+  "Fruity", "Floral", "Nutty", "Chocolatey", "Bright", "Smoky", "Sweet", "Clean",
+  "Berry", "Citrus", "Stone Fruit", "Caramel", "Cocoa", "Honey", "Black Tea",
+];
+
+// Constrain the model to the known vocabulary so it classifies rather than
+// coins near-duplicates — this is what keeps the community review cheap.
+function buildPrompt(processes: string[], notes: string[]): string {
+  return (
+    "This is a photo of a coffee bean bag. Extract the label information into the " +
+    "requested fields. Use an empty string, 0, or [] for anything not visible or not " +
+    "legible — do not guess values that aren't on the bag.\n\n" +
+    "For `process`, classify into exactly one of: " + processes.join(", ") + ". Use an " +
+    "empty string if the bag doesn't clearly state a process. Do not invent new process names.\n\n" +
+    "For `tastingNotes`, prefer these existing terms whenever they match what's printed: " +
+    notes.join(", ") + ". Only use a new short term if none of these fit what the bag says. " +
+    "Return an empty array if no tasting notes are printed."
+  );
+}
+
+// Accept only arrays of short, plain strings; cap count to keep the prompt bounded.
+function cleanVocab(v: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(v)) return fallback;
+  const out = v.filter((x) => typeof x === "string" && x.trim() && x.length <= 40)
+    .map((x) => (x as string).trim()).slice(0, 200);
+  return out.length ? out : fallback;
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -91,7 +116,7 @@ Deno.serve(async (req) => {
     const { data: { user } } = await supa.auth.getUser();
     if (!user) return json({ error: "sign in required" }, 401);
 
-    const { image } = await req.json();
+    const { image, knownProcesses, knownNotes } = await req.json();
     if (
       typeof image !== "string" ||
       !image.startsWith("data:image/") ||
@@ -101,6 +126,10 @@ Deno.serve(async (req) => {
     }
     const mediaType = image.slice(5, image.indexOf(";"));
     const b64 = image.slice(image.indexOf(",") + 1);
+    const prompt = buildPrompt(
+      cleanVocab(knownProcesses, DEFAULT_PROCESSES),
+      cleanVocab(knownNotes, DEFAULT_NOTES),
+    );
 
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -123,7 +152,7 @@ Deno.serve(async (req) => {
                 type: "image",
                 source: { type: "base64", media_type: mediaType, data: b64 },
               },
-              { type: "text", text: PROMPT },
+              { type: "text", text: prompt },
             ],
           },
         ],

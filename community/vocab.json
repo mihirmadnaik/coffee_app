@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "updated": "2026-07-06",
+  "tastingNotes": [
+    "Fruity", "Floral", "Nutty", "Chocolatey", "Bright", "Smoky", "Sweet", "Clean",
+    "Berry", "Citrus", "Stone Fruit", "Caramel", "Cocoa", "Honey",
+    "Jasmine", "Black Tea", "Winey", "Juicy", "Tropical"
+  ],
+  "processes": [
+    "Washed", "Natural", "Honey", "Anaerobic"
+  ]
+}
