@@ -310,15 +310,14 @@ function syncSnapshot(cols) {
   return m;
 }
 
+// Emits UPSERTS only. Deletions are NEVER inferred from a snapshot difference
+// (that caused whole-account wipes when the shadow and local data belonged to
+// different accounts). Real deletions are tracked explicitly — see sync_deletes.
 function syncDiff(shadow, snap) {
   const rows = [], now = new Date().toISOString();
   for (const k in snap) if (shadow[k] !== snap[k]) {
     const [kind, id] = syncSplitKey(k);
     rows.push({ id, kind, payload: JSON.parse(snap[k]), updated_at: now, deleted: false });
-  }
-  for (const k in shadow) if (!(k in snap)) {
-    const [kind, id] = syncSplitKey(k);
-    rows.push({ id, kind, payload: {}, updated_at: now, deleted: true });
   }
   return rows;
 }
@@ -355,22 +354,22 @@ function syncApplyRemote(rows, pendingKeys, cols) {
     customNotes: notes, customDrinks: drinks } };
 }
 
-async function syncPullAll(since) {
-  const out = [], seen = new Set();
-  let cursor = since;
-  for (let page = 0; page < 20; page++) {
+// Pulls the FULL user_data set every sync (RLS scopes it to this account).
+// Offset-paginated by a stable key — immune to the clock-skew that made the old
+// updated_at cursor silently skip another device's writes. Trivial bandwidth at
+// a personal diary's scale; syncApplyRemote is idempotent so re-applying is free.
+async function syncPullAll() {
+  const out = [];
+  const PAGE = 1000;
+  for (let page = 0; page < 50; page++) {
+    const from = page * PAGE;
     const { data, error } = await SB.from('user_data')
       .select('id,kind,payload,updated_at,deleted')
-      .gte('updated_at', cursor)
-      .order('updated_at', { ascending: true })
-      .limit(1000);
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1);
     if (error) throw error;
-    data.forEach(r => {
-      const k = r.kind + ':' + r.id + ':' + r.updated_at;
-      if (!seen.has(k)) { seen.add(k); out.push(r); }
-    });
-    if (data.length < 1000) break;
-    cursor = data[data.length - 1].updated_at;
+    out.push(...(data || []));
+    if (!data || data.length < PAGE) break;
   }
   return out;
 }
@@ -1828,7 +1827,7 @@ function StatsDash({ entries, onTab, onAdd }) {
 }
 
 // ── Gear Locker ───────────────────────────────────────────────────────────────
-function GearLocker({ gear, onChange, catalog=GEAR_CATALOG }) {
+function GearLocker({ gear, onChange, onRemove, catalog=GEAR_CATALOG }) {
   const [q, setQ]               = useState('');
   const [customMode, setCustom] = useState(false);
   const [cName, setCName]       = useState('');
@@ -1853,7 +1852,7 @@ function GearLocker({ gear, onChange, catalog=GEAR_CATALOG }) {
     if (cShare) { const { id, ...pub } = item; queueShare('gear', pub); }
     setCName(''); setCustom(false); setCShare(false); setQ('');
   };
-  const remove = id => { onChange(gear.filter(g => g.id!==id)); if (editId===id) setEditId(null); };
+  const remove = id => { onRemove ? onRemove(id) : onChange(gear.filter(g => g.id!==id)); if (editId===id) setEditId(null); };
   const update = (id, k, v) => onChange(gear.map(g => g.id===id ? { ...g, [k]:v } : g));
   const catLabel = c => (GEAR_CATS.find(([k])=>k===c)||[c,c])[1];
 
@@ -2064,7 +2063,8 @@ function AccountCard({ session, syncState, lastSyncAt, onSync }) {
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, gearCatalog=GEAR_CATALOG, session, syncState, lastSyncAt, onSync }) {
+function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, onGearRemove, gearCatalog=GEAR_CATALOG, session, syncState, lastSyncAt, onSync, onExport, onImport }) {
+  const importRef = useRef(null);
   const total = entries.length;
   const cafe  = entries.filter(e=>e.type==='cafe').length;
   const brew  = entries.filter(e=>e.type==='brew').length;
@@ -2089,7 +2089,7 @@ function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, ge
             </div>
           ))}
         </div>
-        <GearLocker gear={gear} onChange={onGearChange} catalog={gearCatalog} />
+        <GearLocker gear={gear} onChange={onGearChange} onRemove={onGearRemove} catalog={gearCatalog} />
         {(() => {
           let n = 0;
           try { n = JSON.parse(localStorage.getItem('share_queue')||'[]').length; } catch {}
@@ -2103,6 +2103,22 @@ function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, ge
             </div>
           );
         })()}
+        <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
+          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>Backup</div>
+          <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6, marginBottom:10 }}>
+            Download a copy of your diary, or restore one. Kept on your device — a safety net independent of cloud sync.
+          </div>
+          <input ref={importRef} type="file" accept="application/json,.json" style={{ display:'none' }}
+            onChange={e=>{ const file = e.target.files && e.target.files[0]; if (file && onImport) onImport(file); e.target.value=''; }} />
+          <div style={{ display:'flex', gap:8 }}>
+            <div onClick={onExport} style={{ flex:1, border:'1px solid '+G.chipBorder, borderRadius:9, padding:'9px', textAlign:'center', cursor:'pointer' }}>
+              <span style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace' }}>export</span>
+            </div>
+            <div onClick={()=>importRef.current && importRef.current.click()} style={{ flex:1, border:'1px solid '+G.chipBorder, borderRadius:9, padding:'9px', textAlign:'center', cursor:'pointer' }}>
+              <span style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace' }}>import</span>
+            </div>
+          </div>
+        </div>
         <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
           <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>About</div>
           <div style={{ fontSize:12, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6 }}>
@@ -2457,6 +2473,8 @@ function App() {
   const [customNotes, setCustomNotes] = useLS('custom_notes',    []);
   const [customDrinks,setCustomDrinks]= useLS('custom_drinks',   []);
   const [gear,        setGear]        = useLS('coffee_gear',     []);
+  const [pendingDeletes, setPendingDeletes] = useLS('sync_deletes', []); // "kind:id" tombstones to push
+  const removeGear = id => { setGear(gear.filter(g => g.id!==id)); setPendingDeletes(p => [...new Set([...p, 'gear:'+id])]); };
   const community = useCommunity();
   useEffect(() => { flushShareQueue(); }, []);
 
@@ -2475,7 +2493,7 @@ function App() {
   const syncAgainRef = useRef(false);
   const syncTimerRef = useRef(null);
   const stateRef = useRef({});
-  stateRef.current = { entries, beans, gear, customNotes, customDrinks, session };
+  stateRef.current = { entries, beans, gear, customNotes, customDrinks, pendingDeletes, session };
 
   const doSync = useCallback(async () => {
     const s = stateRef.current.session;
@@ -2485,17 +2503,23 @@ function App() {
     setSyncState('syncing');
     try {
       const uid = s.user.id;
-      const shadowKey = 'sync_shadow_'+uid, cursorKey = 'sync_pull_'+uid;
+      const shadowKey = 'sync_shadow2_'+uid;   // v2 key: ignores the old poisoned shadows
+      // Account switch on this device: the working localStorage may belong to the
+      // previous account, so force a clean first-sync (merge/discard prompt) rather
+      // than diffing a stale shadow against foreign data.
+      const switched = !!localStorage.getItem('sync_uid') && localStorage.getItem('sync_uid') !== uid;
       let shadow = null;
       try { shadow = JSON.parse(localStorage.getItem(shadowKey)); } catch {}
-      let lastPull = localStorage.getItem(cursorKey) || '1970-01-01T00:00:00Z';
+      if (switched) shadow = null;
+      const firstSync = !shadow;
       let cols = { entries: stateRef.current.entries, beans: stateRef.current.beans,
         gear: stateRef.current.gear, customNotes: stateRef.current.customNotes,
         customDrinks: stateRef.current.customDrinks };
 
-      if (!shadow) {
-        // First sync for this account on this device
-        const all = await syncPullAll('1970-01-01T00:00:00Z');
+      const all = await syncPullAll();   // full state, every sync
+
+      if (firstSync) {
+        // First sync for this account on this device (or right after an account switch)
         const remoteCols = syncApplyRemote(all, new Set(),
           { entries:[], beans:[], gear:[], customNotes:[], customDrinks:[] }).cols;
         const remoteLive = all.filter(r => !r.deleted && r.kind !== 'setting');
@@ -2516,29 +2540,33 @@ function App() {
           const pending = new Set(syncDiff(shadow, syncSnapshot(cols)).map(r => r.kind+':'+r.id));
           cols = syncApplyRemote(all, pending, cols).cols;
         }
-        if (all.length) lastPull = all[all.length-1].updated_at;
+        // Deletions queued in a prior context don't apply to this account
+        if (stateRef.current.pendingDeletes.length) setPendingDeletes([]);
       } else {
-        const rows = await syncPullAll(lastPull);
-        if (rows.length) {
-          const pending = new Set(syncDiff(shadow, syncSnapshot(cols)).map(r => r.kind+':'+r.id));
-          cols = syncApplyRemote(rows, pending, cols).cols;
-          lastPull = rows[rows.length-1].updated_at;
-        }
+        const pending = new Set(syncDiff(shadow, syncSnapshot(cols)).map(r => r.kind+':'+r.id));
+        cols = syncApplyRemote(all, pending, cols).cols;
       }
 
-      // Push everything that changed locally since the shadow
+      // Push local upserts since the shadow, plus explicit deletions (established
+      // account only). syncDiff never infers deletes, so a mismatch can't wipe data.
       const snap = syncSnapshot(cols);
       const changes = syncDiff(shadow, snap);
-      for (let i = 0; i < changes.length; i += 200) {
+      const nowIso = new Date().toISOString();
+      const tombstones = firstSync ? [] : stateRef.current.pendingDeletes.map(key => {
+        const [kind, id] = syncSplitKey(key);
+        return { id, kind, payload:{}, updated_at: nowIso, deleted: true };
+      });
+      const push = [...changes, ...tombstones];
+      for (let i = 0; i < push.length; i += 200) {
         const { error } = await SB.from('user_data')
-          .upsert(changes.slice(i, i+200), { onConflict: 'user_id,id' });
+          .upsert(push.slice(i, i+200), { onConflict: 'user_id,id' });
         if (error) throw error;
       }
-      if (changes.length) lastPull = changes.reduce((m,r) => r.updated_at > m ? r.updated_at : m, lastPull);
+      if (!firstSync && stateRef.current.pendingDeletes.length) setPendingDeletes([]);
 
-      // Commit: shadow, pull cursor, and any merged-in remote data
+      // Commit: shadow, active account marker, and any merged-in remote data
       localStorage.setItem(shadowKey, JSON.stringify(snap));
-      localStorage.setItem(cursorKey, lastPull);
+      localStorage.setItem('sync_uid', uid);
       const cur = stateRef.current;
       if (JSON.stringify(cols.entries)      !== JSON.stringify(cur.entries))      setEntries(cols.entries);
       if (JSON.stringify(cols.beans)        !== JSON.stringify(cur.beans))        setBeans(cols.beans);
@@ -2568,7 +2596,7 @@ function App() {
     clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(doSync, 3500);
     return () => clearTimeout(syncTimerRef.current);
-  }, [entries, beans, gear, customNotes, customDrinks]);
+  }, [entries, beans, gear, customNotes, customDrinks, pendingDeletes]);
   const gearCatalog = [...GEAR_CATALOG, ...community.gear.filter(g =>
     g && g.n && !GEAR_CATALOG.some(c => c.n.toLowerCase()===g.n.toLowerCase()))];
   const [view,    setView]          = useState('home');
@@ -2597,6 +2625,34 @@ function App() {
   const expand = (type, partial) => { setInit(partial); setSheet(false); setView(type==='cafe'?'cafe-form':'brew-form'); };
 
   const brewAgain  = src => saveEntry({ ...src, id:genId(), date:new Date().toISOString() });
+
+  // ── Manual backup: download / restore a JSON of everything ──
+  const exportData = () => {
+    const data = { app:'coffee-diary', version:1, exportedAt:new Date().toISOString(),
+      entries, beans, gear, customNotes, customDrinks };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type:'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'coffee-diary-backup.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+  const importData = file => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const d = JSON.parse(reader.result);
+        const mergeById = (cur, inc) => { const m = new Map(cur.map(x=>[x.id,x]));
+          (inc||[]).forEach(x=>{ if (x && x.id) m.set(x.id, x); }); return [...m.values()]; };
+        if (Array.isArray(d.entries)) setEntries(mergeById(entries, d.entries).sort((a,b)=>(b.date||'').localeCompare(a.date||'')));
+        if (Array.isArray(d.beans))   setBeans(mergeById(beans, d.beans));
+        if (Array.isArray(d.gear))    setGear(mergeById(gear, d.gear));
+        if (Array.isArray(d.customNotes))  setCustomNotes([...new Set([...customNotes, ...d.customNotes])]);
+        if (Array.isArray(d.customDrinks)) setCustomDrinks([...new Set([...customDrinks, ...d.customDrinks])]);
+        window.alert('Import complete — your items were merged in.');
+      } catch { window.alert("Could not read that file — make sure it's a Coffee Diary backup."); }
+    };
+    reader.readAsText(file);
+  };
   const startTimer = r => { setTimerRecipe(r); setView('brew-timer'); };
   const pinDialed  = entry => setBeans(prev => prev.map(b => {
     if (b.name !== entry.beanName) return b;
@@ -2614,7 +2670,7 @@ function App() {
       {view==='home'         && <HomeScreen    entries={entries} {...sp} onEntryPress={e=>{ setSelEntry(e); setView('entry-detail'); }} onLogCafe={p=>{ setInit(p); setView('cafe-form'); }} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
       {view==='beans'        && <BeanLibrary   beans={beans} {...sp} onAddBean={()=>setView('add-bean')} onBeanPress={b=>{ setSelBean(b); setView('bean-detail'); }} />}
       {view==='stats'        && <StatsDash     entries={entries} {...sp} />}
-      {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} gear={gear} onGearChange={setGear} gearCatalog={gearCatalog} session={session} syncState={syncState} lastSyncAt={lastSyncAt} onSync={doSync} />}
+      {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} gear={gear} onGearChange={setGear} onGearRemove={removeGear} gearCatalog={gearCatalog} session={session} syncState={syncState} lastSyncAt={lastSyncAt} onSync={doSync} onExport={exportData} onImport={importData} />}
       {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} beans={beans} onPinDialed={pinDialed} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
       {view==='bean-detail'  && selectedBean  && <BeanDetail  bean={selectedBean}  onBack={()=>setView('beans')} onEdit={()=>{ setInit(selectedBean); setView('bean-form-edit'); }} entries={entries} onBrewNow={startTimer} communityRecipes={community.recipes} />}
       {view==='brew-timer'   && timerRecipe   && <TimerScreen recipe={timerRecipe} onCancel={()=>setView('home')} onLog={saveEntry} />}
