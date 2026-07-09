@@ -42,6 +42,61 @@ For each pending submission:
 
 ---
 
+## 2026-07-09 — curated seed import (not a submission pass)
+
+**This was a proactive library seed, not a Supabase inbox review.** The goal was
+to give new users a useful autocomplete/library from day one. Data was gathered
+by researching roasters' **product pages and reputable third-party listings**
+(Amazon, Coffee Review, retailer pages) via web search and extracting the
+**roaster's own printed** fields — *not* by scanning bag images and *not* from
+user submissions. No Supabase rows were touched.
+
+### Method & rules
+- Scope: core/flagship, year-round offerings only. Skipped limited/seasonal
+  single-origin releases, subscriptions, pods, instant, and cold brew.
+- `roastLevel` mapped from stated roast character: light≈3, medium-light≈4,
+  medium≈5–6, medium-dark≈7, dark≈8–9.
+- `process` recorded **only when the page stated it** (most blends don't) — so
+  nearly all seeded beans omit `process` (app shows None), matching the v3 rule.
+  Blends that mix processes across components (e.g. Verve *Sermon*, George Howell
+  *Alchemy*) deliberately omit `process` rather than pick one.
+- `tastingNotes` taken verbatim from the roaster and normalized to Title Case
+  single terms; near-duplicates merged ("milk/dark chocolate" → `Chocolate`,
+  "baker's cocoa"/"cacao" → `Cocoa`, "brownie" → `Chocolate`, "red fruit" →
+  `Berry`, "amaretto" → `Almond`).
+
+### Counts
+- **+74 beans** across **~35 roasters** (Stumptown, Verve, Counter Culture,
+  Intelligentsia, Blue Bottle, Onyx, Peet's, La Colombe, George Howell, Equator,
+  Ritual, Sightglass, Temple, Klatch, Partners, Black & White, Heart, Madcap,
+  Ruby, Cat & Cloud, Coava, Sweet Bloom, Passenger, Wrecking Ball, Ceremony,
+  Metric, Devoción, Café Grumpy, PT's, Brandywine, Red Rooster, Wonderstate,
+  Bird Rock, JBC, Groundwork, Dune, Elm, Espresso Vivace, Zoka, Dragonfly,
+  Dogwood, Spyhouse, Barrington, Victrola).
+- Dedup: none collided with the existing 9 catalog entries (the six shared
+  roasters contributed *different* core beans, e.g. Stumptown *Holler Mountain*
+  not *Hair Bender*; Intelligentsia *House Blend* not *Black Cat*).
+- `beans.json` v3 → v4 (9 → 83 items).
+
+### Vocabulary loop
+Promoted new tasting-note terms that appear on ≥2 seeded beans into
+`vocab.json.tastingNotes` (so they feed back as app presets and scan hints):
+`Chocolate, Cocoa, Blackberry, Cherry, Orange, Mandarin, Lemon, Plum, Apricot,
+Strawberry, Raisin, Toffee, Brown Sugar, Molasses, Vanilla, Nougat, Malt,
+Almond, Hazelnut, Walnut, Spice, Dried Fruit`. One-off terms (e.g. Praline,
+Butterscotch, Hibiscus, Marshmallow, Honeycomb, Clementine) were kept on their
+bean but **not** promoted, to avoid vocabulary bloat. `vocab.json` v1 → v2. No
+new processing methods appeared, so `vocab.json.processes` is unchanged.
+
+### Caveats for a future pass
+- `roastLevel` is an interpretation of prose roast descriptions, not an official
+  0–10 scale from the roasters — treat as approximate.
+- Several flagship blends are seasonal-rotating by design (Onyx *Southern
+  Weather*, Madcap *Third Coast*, Ritual *Seasonal Espresso*, Sightglass *Owl's
+  Howl*); notes reflect a representative/recent profile and may drift.
+
+---
+
 ## 2026-07-06 — catalog shape extended (manual)
 
 No inbox pass. Extended the bean shape to carry optional `origin` and
