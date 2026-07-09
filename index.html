@@ -2346,7 +2346,7 @@ function AccountCard({ session, syncState, lastSyncAt, onSync }) {
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, onGearRemove, gearCatalog=GEAR_CATALOG, session, syncState, lastSyncAt, onSync, onExport, onImport }) {
+function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, onGearRemove, gearCatalog=GEAR_CATALOG, session, syncState, lastSyncAt, onSync, onExport, onImport, timerMode='staged', onTimerModeChange=()=>{} }) {
   const importRef = useRef(null);
   const total = entries.length;
   const cafe  = entries.filter(e=>e.type==='cafe').length;
@@ -2386,6 +2386,24 @@ function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, on
             </div>
           );
         })()}
+        <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
+          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>Brew Timer</div>
+          <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6, marginBottom:10 }}>
+            {timerMode==='staged'
+              ? 'Guided: each stage is its own countdown that chimes when done; manual steps wait for a tap.'
+              : 'Checklist: one running clock with the method’s steps highlighted as time passes.'}
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            {[['staged','Guided'],['checklist','Checklist']].map(([val,lbl])=>(
+              <div key={val} onClick={()=>onTimerModeChange(val)}
+                style={{ flex:1, borderRadius:9, padding:'9px', textAlign:'center', cursor:'pointer',
+                  background: timerMode===val ? P.brew : 'transparent',
+                  border:'1px solid '+(timerMode===val ? P.brew : G.chipBorder) }}>
+                <span style={{ fontSize:10, fontFamily:'DM Mono, monospace', color: timerMode===val ? '#182635' : G.text }}>{lbl}</span>
+              </div>
+            ))}
+          </div>
+        </div>
         <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
           <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>Backup</div>
           <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6, marginBottom:10 }}>
@@ -2767,6 +2785,7 @@ function App() {
   const [customProcesses,setCustomProcesses]= useLS('custom_processes', []);
   const [gear,        setGear]        = useLS('coffee_gear',     []);
   const [pendingDeletes, setPendingDeletes] = useLS('sync_deletes', []); // "kind:id" tombstones to push
+  const [timerMode, setTimerMode] = useLS('timer_mode', 'staged'); // 'staged' | 'checklist' — device-local brew-timer preference
   const removeGear = id => { setGear(gear.filter(g => g.id!==id)); setPendingDeletes(p => [...new Set([...p, 'gear:'+id])]); };
   const community = useCommunity();
   useEffect(() => { flushShareQueue(); }, []);
@@ -2964,10 +2983,10 @@ function App() {
       {view==='home'         && <HomeScreen    entries={entries} {...sp} onEntryPress={e=>{ setSelEntry(e); setView('entry-detail'); }} onLogCafe={p=>{ setInit(p); setView('cafe-form'); }} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
       {view==='beans'        && <BeanLibrary   beans={beans} {...sp} onAddBean={()=>setView('add-bean')} onBeanPress={b=>{ setSelBean(b); setView('bean-detail'); }} />}
       {view==='stats'        && <StatsDash     entries={entries} {...sp} />}
-      {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} gear={gear} onGearChange={setGear} onGearRemove={removeGear} gearCatalog={gearCatalog} session={session} syncState={syncState} lastSyncAt={lastSyncAt} onSync={doSync} onExport={exportData} onImport={importData} />}
+      {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} gear={gear} onGearChange={setGear} onGearRemove={removeGear} gearCatalog={gearCatalog} session={session} syncState={syncState} lastSyncAt={lastSyncAt} onSync={doSync} onExport={exportData} onImport={importData} timerMode={timerMode} onTimerModeChange={setTimerMode} />}
       {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} beans={beans} onPinDialed={pinDialed} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
       {view==='bean-detail'  && selectedBean  && <BeanDetail  bean={selectedBean}  onBack={()=>setView('beans')} onEdit={()=>{ setInit(selectedBean); setView('bean-form-edit'); }} entries={entries} onBrewNow={startTimer} communityRecipes={community.recipes} />}
-      {view==='brew-timer'   && timerRecipe   && <TimerScreen recipe={timerRecipe} onCancel={()=>setView('home')} onLog={saveEntry} />}
+      {view==='brew-timer'   && timerRecipe   && <TimerScreen recipe={timerRecipe} onCancel={()=>setView('home')} onLog={saveEntry} mode={timerMode} />}
       {view==='cafe-form'    && <CafeForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   customNotes={customNotes} onAddNote={setCustomNotes} customDrinks={customDrinks} onAddDrink={setCustomDrinks} />}
       {view==='brew-form'    && <BrewForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   beans={beans} entries={entries} gear={gear} customNotes={customNotes} onAddNote={setCustomNotes} />}
       {view==='cafe-form-edit'&& <CafeForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} customNotes={customNotes} onAddNote={setCustomNotes} customDrinks={customDrinks} onAddDrink={setCustomDrinks} />}
