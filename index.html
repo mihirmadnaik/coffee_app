@@ -1423,7 +1423,8 @@ function QuickCaptureSheet({ onClose, onSave, onExpand, beans=[], gear=[] }) {
       ? { ...base, cafeName, drinkType, location:'', bean:'', price:'',
           ratings:{overall:rating,aroma:0,taste:0,texture:0}, vibeTags:[], wouldVisitAgain:false }
       : { ...base, beanName, method, roaster:'', grinder:'', machine:'', dose:'', water:'', temp:'',
-          brewTime:'', grindSize:'', ratio:'', whatIdChange:'', recipe:'' };
+          brewTime:'', grindSize:'', ratio:'', whatIdChange:'', recipe:'',
+          bloomWater:'', bloomTime:'', pours:'', steepTime:'', secondSteep:'', preInfusion:'', pressure:'', basket:'' };
     onSave(entry);
   };
 
@@ -2515,10 +2516,10 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
   const canPin = isBrew && onPinDialed && beans.some(b => b.name===entry.beanName);
   const shareRecipe = () => {
     if (shared) return;
-    queueShare('recipe', { beanName:entry.beanName||'', roaster:entry.roaster||'',
-      method:entry.method||'', grinder:entry.grinder||'', machine:entry.machine||'',
-      dose:entry.dose||'', water:entry.water||'', temp:entry.temp||'',
-      brewTime:entry.brewTime||'', grindSize:entry.grindSize||'', ratio:entry.ratio||'' });
+    const payload = { beanName:entry.beanName||'', roaster:entry.roaster||'',
+      method:entry.method||'', grinder:entry.grinder||'', machine:entry.machine||'' };
+    getMethodSchema(entry.method).fields.forEach(([,key]) => { payload[key] = entry[key]||''; });
+    queueShare('recipe', payload);
     setShared(true);
   };
   const title = isBrew ? (entry.beanName||'Unnamed Brew') : (entry.cafeName||'Unnamed Café');
@@ -2572,18 +2573,26 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
               <div style={{fontSize:9,color:G.label,fontFamily:'DM Mono, monospace',marginBottom:6,letterSpacing:'0.1em',textTransform:'uppercase'}}>Method</div>
               {entry.method && <div style={{display:'inline-block'}}><GhostChip label={entry.method} active /></div>}
             </div>
-            {(entry.dose||entry.water||entry.temp||entry.brewTime||entry.grindSize||entry.ratio) && (
-              <><FormDivider /><SectionHead label="Parameters" /><div style={{height:6}}/>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-                  {[['Dose',entry.dose],['Water',entry.water],['Temp',entry.temp],['Time',entry.brewTime],['Grind',entry.grindSize],['Grinder',entry.grinder],['Ratio',entry.ratio]].filter(([,v])=>v).map(([l,v])=>(
-                    <div key={l}>
-                      <div style={{fontSize:8,color:G.label,fontFamily:'DM Mono, monospace',letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:2}}>{l}</div>
-                      <div style={{fontSize:13,color:G.text,fontFamily:'DM Mono, monospace',fontWeight:300}}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+            {(() => {
+              // Parameters shown are driven by the entry's method schema (falls
+              // back to the generic set), so method-specific fields appear here.
+              const rows = getMethodSchema(entry.method).fields
+                .map(([lbl,key]) => [lbl, entry[key]]).filter(([,v]) => v);
+              if (entry.grinder) rows.push(['Grinder', entry.grinder]);
+              if (!rows.length) return null;
+              return (
+                <><FormDivider /><SectionHead label="Parameters" /><div style={{height:6}}/>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                    {rows.map(([l,v])=>(
+                      <div key={l}>
+                        <div style={{fontSize:8,color:G.label,fontFamily:'DM Mono, monospace',letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:2}}>{l}</div>
+                        <div style={{fontSize:13,color:G.text,fontFamily:'DM Mono, monospace',fontWeight:300}}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
             {entry.tastingNotes?.length>0 && (<><FormDivider /><SectionHead label="Tasting" /><div style={{height:6}}/><div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>{entry.tastingNotes.map(n=><GhostChip key={n} label={n} active />)}</div></>)}
             {entry.rating>0 && <div style={{marginBottom:10}}><div style={{fontSize:9,color:G.label,fontFamily:'DM Mono, monospace',marginBottom:6,letterSpacing:'0.1em',textTransform:'uppercase'}}>Rating</div><RatingSquares n={entry.rating} size={16} /></div>}
             <div style={{ display:'flex', gap:8, marginTop:6, marginBottom:10 }}>
@@ -2969,9 +2978,8 @@ function App() {
   const startTimer = r => { setTimerRecipe(r); setView('brew-timer'); };
   const pinDialed  = entry => setBeans(prev => prev.map(b => {
     if (b.name !== entry.beanName) return b;
-    const snap = { method:entry.method||'', grinder:entry.grinder||'', machine:entry.machine||'',
-      dose:entry.dose||'', water:entry.water||'', temp:entry.temp||'', brewTime:entry.brewTime||'',
-      grindSize:entry.grindSize||'', ratio:entry.ratio||'', recipe:entry.recipe||'' };
+    const snap = { method:entry.method||'', grinder:entry.grinder||'', machine:entry.machine||'', recipe:entry.recipe||'' };
+    getMethodSchema(entry.method).fields.forEach(([,key]) => { snap[key] = entry[key]||''; });
     return { ...b, dialed:undefined,
       dialedByMethod:{ ...(dialedMap(b)||{}), [entry.method||'Brew']: snap } };
   }));
