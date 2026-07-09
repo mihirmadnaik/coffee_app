@@ -1099,15 +1099,27 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgai
 }
 
 // ── Brew Timer ────────────────────────────────────────────────────────────────
-function TimerScreen({ recipe, onCancel, onLog }) {
-  const [elapsed,  setElapsed]  = useState(0);
+function TimerScreen({ recipe, onCancel, onLog, mode='staged' }) {
+  const [elapsed,  setElapsed]  = useState(0);   // total seconds across all stages
   const [running,  setRunning]  = useState(false);
   const [finished, setFinished] = useState(false);
   const [rating,   setRating]   = useState(0);
+  const [stageIdx,   setStageIdx]   = useState(0);
+  const [stageStart, setStageStart] = useState(0); // value of `elapsed` when the current stage began
+  const [flashOn,  setFlashOn]  = useState(false);
   const startRef = useRef(0);
 
-  const steps  = buildSteps(recipe);
-  const target = parseTimeStr(recipe.brewTime);
+  const stages = getMethodSchema(recipe.method).workflow(recipe) || [];
+  const staged = mode === 'staged' && stages.length > 0;
+
+  // checklist mode: cumulative start time of each stage + total timed duration
+  let _acc = 0;
+  const checklist = stages.map(s => { const at = _acc; if (s.kind === 'timed') _acc += (s.seconds || 0); return { ...s, at }; });
+  const totalTimed = _acc;
+
+  const curStage    = stages[stageIdx];
+  const stageElapsed = elapsed - stageStart;
+  const flash = () => { setFlashOn(true); setTimeout(() => setFlashOn(false), 700); };
 
   useEffect(() => {
     if (!running) return;
@@ -1122,16 +1134,32 @@ function TimerScreen({ recipe, onCancel, onLog }) {
     return () => { if (lock) lock.release().catch(()=>{}); };
   }, []);
 
-  const curIdx = steps.reduce((acc,s,i) => elapsed >= s.at ? i : acc, 0);
-  const over   = target > 0 && elapsed > target;
+  const advance = () => {
+    if (stageIdx >= stages.length-1) { setRunning(false); setFinished(true); return; }
+    setStageIdx(i => i+1); setStageStart(elapsed);
+  };
+
+  // staged mode: auto-advance a timed stage when its countdown hits zero (chime + flash)
+  useEffect(() => {
+    if (!staged || !running || finished || !curStage) return;
+    if (curStage.kind === 'timed' && stageElapsed >= curStage.seconds) { beep(); flash(); advance(); }
+  }, [elapsed]);
+
+  const curIdx = checklist.reduce((acc,s,i) => elapsed >= s.at ? i : acc, 0);
+  const target = staged ? 0 : (parseTimeStr(recipe.brewTime) || totalTimed);
+  const over   = !staged && target > 0 && elapsed > target;
+  const stageRemain = curStage && curStage.kind === 'timed' ? Math.max(curStage.seconds - stageElapsed, 0) : 0;
 
   const handleLog = () => onLog({
     id:genId(), date:new Date().toISOString(), type:'brew',
     beanName:recipe.beanName||'', roaster:recipe.roaster||'',
     method:recipe.method||'', grinder:recipe.grinder||'', machine:recipe.machine||'', dose:recipe.dose||'', water:recipe.water||'',
     temp:recipe.temp||'', brewTime:fmtSec(elapsed), grindSize:recipe.grindSize||'',
-    ratio:recipe.ratio||'', tastingNotes:[], rating,
-    whatIdChange:'', recipe:recipe.recipe||''
+    ratio:recipe.ratio||'',
+    bloomWater:recipe.bloomWater||'', bloomTime:recipe.bloomTime||'', pours:recipe.pours||'',
+    steepTime:recipe.steepTime||'', secondSteep:recipe.secondSteep||'',
+    preInfusion:recipe.preInfusion||'', pressure:recipe.pressure||'', basket:recipe.basket||'',
+    tastingNotes:[], rating, whatIdChange:'', recipe:recipe.recipe||''
   });
 
   const params = [['dose',recipe.dose],['water',recipe.water],['temp',recipe.temp],['grind',recipe.grindSize],['grinder',recipe.grinder],['machine',recipe.machine],['ratio',recipe.ratio]].filter(([,v])=>v);
@@ -1158,26 +1186,59 @@ function TimerScreen({ recipe, onCancel, onLog }) {
             ))}
           </div>
         )}
-        <div style={{ textAlign:'center', marginBottom:18 }}>
-          <div style={{ fontSize:60, fontWeight:300, color: over ? P.cafe : P.headerText, fontFamily:'DM Mono, monospace', lineHeight:1 }}>{fmtSec(elapsed)}</div>
-          {target>0 && <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginTop:6 }}>target {fmtSec(target)}</div>}
-        </div>
 
-        {!finished && (
-          <div style={{ marginBottom:20 }}>
-            {steps.map((s,i)=>(
-              <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 10px',
-                borderRadius:8, marginBottom:3,
-                background: i===curIdx && elapsed>0 ? 'rgba(122,154,176,0.14)' : 'transparent' }}>
-                <span style={{ fontSize:9, color: i<=curIdx && elapsed>0 ? P.brew : P.headerMuted,
-                  fontFamily:'DM Mono, monospace', width:34, flexShrink:0 }}>{fmtSec(s.at)}</span>
-                <span style={{ fontSize:11, fontFamily:'DM Mono, monospace', fontWeight:300,
-                  color: i===curIdx && elapsed>0 ? G.text : P.headerMuted,
-                  opacity: i>curIdx ? 0.6 : 1 }}>{i<curIdx?'✓ ':''}{s.label}</span>
+        {staged && !finished ? (
+          <>
+            {curStage && (
+              <div className={flashOn ? 'stage-flash' : ''} style={{ textAlign:'center', marginBottom:16, borderRadius:14, padding:'10px 0' }}>
+                <div style={{ fontSize:9, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.12em', marginBottom:8 }}>
+                  STAGE {stageIdx+1}/{stages.length} · {curStage.label.toUpperCase()}
+                </div>
+                <div style={{ fontSize:60, fontWeight:300, color:P.headerText, fontFamily:'DM Mono, monospace', lineHeight:1 }}>
+                  {curStage.kind==='timed' ? fmtSec(stageRemain) : fmtSec(stageElapsed)}
+                </div>
+                <div style={{ fontSize:11, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:10, padding:'0 20px' }}>{curStage.cue}</div>
+                {curStage.kind==='manual' && <div style={{ fontSize:8.5, color:P.cafe, fontFamily:'DM Mono, monospace', marginTop:6, letterSpacing:'0.1em' }}>▸ tap “done” when finished</div>}
+                <div style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginTop:8 }}>total {fmtSec(elapsed)}</div>
               </div>
-            ))}
-          </div>
-        )}
+            )}
+            <div style={{ marginBottom:20 }}>
+              {stages.map((s,i)=>(
+                <div key={s.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 10px',
+                  borderRadius:8, marginBottom:3,
+                  background: i===stageIdx ? 'rgba(122,154,176,0.14)' : 'transparent' }}>
+                  <span style={{ fontSize:9, color: i<=stageIdx ? P.brew : P.headerMuted, fontFamily:'DM Mono, monospace', width:44, flexShrink:0 }}>
+                    {s.kind==='timed' ? fmtSec(s.seconds) : '·····'}
+                  </span>
+                  <span style={{ fontSize:11, fontFamily:'DM Mono, monospace', fontWeight:300,
+                    color: i===stageIdx ? G.text : P.headerMuted, opacity: i>stageIdx ? 0.6 : 1 }}>
+                    {i<stageIdx?'✓ ':''}{s.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : !finished ? (
+          <>
+            <div style={{ textAlign:'center', marginBottom:18 }}>
+              <div style={{ fontSize:60, fontWeight:300, color: over ? P.cafe : P.headerText, fontFamily:'DM Mono, monospace', lineHeight:1 }}>{fmtSec(elapsed)}</div>
+              {target>0 && <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginTop:6 }}>target {fmtSec(target)}</div>}
+            </div>
+            <div style={{ marginBottom:20 }}>
+              {checklist.map((s,i)=>(
+                <div key={s.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 10px',
+                  borderRadius:8, marginBottom:3,
+                  background: i===curIdx && elapsed>0 ? 'rgba(122,154,176,0.14)' : 'transparent' }}>
+                  <span style={{ fontSize:9, color: i<=curIdx && elapsed>0 ? P.brew : P.headerMuted,
+                    fontFamily:'DM Mono, monospace', width:34, flexShrink:0 }}>{fmtSec(s.at)}</span>
+                  <span style={{ fontSize:11, fontFamily:'DM Mono, monospace', fontWeight:300,
+                    color: i===curIdx && elapsed>0 ? G.text : P.headerMuted,
+                    opacity: i>curIdx ? 0.6 : 1 }}>{i<curIdx?'✓ ':''}{s.cue||s.label}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : null}
 
         <div style={{ marginTop:'auto', paddingBottom:16 }}>
           {!finished ? (
@@ -1189,7 +1250,14 @@ function TimerScreen({ recipe, onCancel, onLog }) {
                   {running ? 'pause' : elapsed>0 ? 'resume' : '▶ start'}
                 </span>
               </div>
-              {elapsed>0 && (
+              {staged && elapsed>0 && curStage && curStage.kind==='manual' ? (
+                <div onClick={()=>{ beep(); flash(); advance(); }}
+                  style={{ flex:1, background:P.brew, borderRadius:12, padding:'14px', textAlign:'center', cursor:'pointer' }}>
+                  <span style={{ fontSize:12, fontFamily:'DM Mono, monospace', color:'#182635' }}>
+                    {stageIdx>=stages.length-1 ? 'done ✓' : 'done →'}
+                  </span>
+                </div>
+              ) : elapsed>0 && (
                 <div onClick={()=>{ setRunning(false); setFinished(true); }}
                   style={{ flex:1, background:P.cafe, borderRadius:12, padding:'14px', textAlign:'center', cursor:'pointer' }}>
                   <span style={{ fontSize:12, fontFamily:'DM Mono, monospace', color:'#182635' }}>finish ✓</span>
