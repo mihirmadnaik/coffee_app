@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "updated": "2026-07-06",
+  "version": 4,
+  "updated": "2026-07-09",
   "items": [
     { "name": "Hair Bender",                "roaster": "Stumptown",       "process": "Washed",  "roastLevel": 5 },
     { "name": "Big Trouble",                "roaster": "Counter Culture", "process": "Washed",  "roastLevel": 5 },
@@ -10,6 +10,124 @@
     { "name": "Monarch",                    "roaster": "Onyx Coffee Lab", "process": "Natural", "roastLevel": 8 },
     { "name": "Hologram",                   "roaster": "Counter Culture", "process": "Washed",  "roastLevel": 4 },
     { "name": "Giant Steps",                "roaster": "Blue Bottle",     "process": "Washed",  "roastLevel": 8 },
-    { "name": "Velvet Blaze",               "roaster": "Summer Moon",     "process": "Washed",  "roastLevel": 6, "origin": "Blend (7 origins)", "tastingNotes": ["Walnut","Blackberry","Chocolate"] }
+    { "name": "Velvet Blaze",               "roaster": "Summer Moon",     "process": "Washed",  "roastLevel": 6, "origin": "Blend (7 origins)", "tastingNotes": ["Walnut","Blackberry","Chocolate"] },
+
+    { "name": "Holler Mountain",            "roaster": "Stumptown",       "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Citrus","Caramel","Hazelnut"] },
+    { "name": "Founder's Blend",            "roaster": "Stumptown",       "roastLevel": 6, "origin": "Blend", "tastingNotes": ["Chocolate","Caramel"] },
+    { "name": "House Blend",                "roaster": "Stumptown",       "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Cocoa","Berry"] },
+    { "name": "French Roast",               "roaster": "Stumptown",       "roastLevel": 9, "origin": "Blend", "tastingNotes": ["Chocolate","Smoky","Spice"] },
+    { "name": "Trapper Creek Decaf",        "roaster": "Stumptown",       "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Cocoa","Graham","Dried Fruit"] },
+    { "name": "Homestead",                  "roaster": "Stumptown",       "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Chocolate","Cherry","Orange"] },
+
+    { "name": "Streetlevel",                "roaster": "Verve",           "process": "Washed", "roastLevel": 5, "origin": "Latin America", "tastingNotes": ["Clementine","Red Apple","Honeycomb"] },
+    { "name": "Sermon",                     "roaster": "Verve",           "roastLevel": 5, "origin": "East Africa & Colombia", "tastingNotes": ["Blueberry","Cocoa","Pecan"] },
+    { "name": "1950",                       "roaster": "Verve",           "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Stone Fruit","Spice"] },
+
+    { "name": "Forty-Six",                  "roaster": "Counter Culture", "roastLevel": 8, "origin": "Blend", "tastingNotes": ["Chocolate","Smoky","Sweet"] },
+    { "name": "Apollo",                     "roaster": "Counter Culture", "process": "Washed", "roastLevel": 5, "origin": "Ethiopia", "tastingNotes": ["Citrus","Floral"] },
+    { "name": "Fast Forward",               "roaster": "Counter Culture", "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Nutty","Sweet"] },
+    { "name": "Slow Motion",                "roaster": "Counter Culture", "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Molasses","Cocoa"] },
+
+    { "name": "Frequency",                  "roaster": "Intelligentsia",  "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Chocolate","Molasses","Dried Fruit"] },
+    { "name": "El Diablo",                  "roaster": "Intelligentsia",  "roastLevel": 8, "origin": "Blend", "tastingNotes": ["Chocolate","Cherry","Molasses"] },
+    { "name": "House Blend",                "roaster": "Intelligentsia",  "roastLevel": 3, "origin": "Blend", "tastingNotes": ["Mandarin"] },
+
+    { "name": "Hayes Valley Espresso",      "roaster": "Blue Bottle",     "roastLevel": 7, "origin": "Blend", "tastingNotes": ["Chocolate","Almond","Cherry"] },
+    { "name": "Three Africas",              "roaster": "Blue Bottle",     "roastLevel": 5, "origin": "Africa", "tastingNotes": ["Chocolate","Raisin","Berry"] },
+    { "name": "Bold",                       "roaster": "Blue Bottle",     "roastLevel": 7, "origin": "Blend", "tastingNotes": ["Caramel","Nutty","Malt"] },
+    { "name": "Night Light",                "roaster": "Blue Bottle",     "roastLevel": 4, "origin": "Blend", "tastingNotes": ["Cocoa","Malt"] },
+
+    { "name": "Southern Weather",           "roaster": "Onyx Coffee Lab", "roastLevel": 5, "origin": "Colombia & Ethiopia", "tastingNotes": ["Chocolate","Plum","Walnut"] },
+
+    { "name": "Major Dickason's Blend",     "roaster": "Peet's",          "roastLevel": 8, "origin": "Blend", "tastingNotes": ["Chocolate","Nutty","Spice"] },
+    { "name": "Big Bang",                   "roaster": "Peet's",          "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Chocolate","Citrus"] },
+    { "name": "French Roast",               "roaster": "Peet's",          "roastLevel": 9, "origin": "Blend", "tastingNotes": ["Smoky","Chocolate","Caramel"] },
+
+    { "name": "Nizza",                      "roaster": "La Colombe",      "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Chocolate","Nutty"] },
+    { "name": "Corsica",                    "roaster": "La Colombe",      "roastLevel": 8, "origin": "Blend", "tastingNotes": ["Chocolate","Winey","Spice"] },
+    { "name": "Lyon",                       "roaster": "La Colombe",      "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Caramel","Chocolate","Toffee"] },
+
+    { "name": "Alchemy Espresso",           "roaster": "George Howell",   "roastLevel": 7, "origin": "Blend", "tastingNotes": ["Chocolate","Almond","Nougat"] },
+
+    { "name": "Tigerwalk Espresso",         "roaster": "Equator",         "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Chocolate","Strawberry","Lemon"] },
+    { "name": "Jaguar Espresso",            "roaster": "Equator",         "roastLevel": 8, "origin": "Blend", "tastingNotes": ["Hazelnut","Chocolate","Apricot"] },
+
+    { "name": "Seasonal Espresso",          "roaster": "Ritual",          "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Black Tea","Lemongrass","Passionfruit"] },
+
+    { "name": "Owl's Howl Espresso",        "roaster": "Sightglass",      "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Cocoa","Stone Fruit","Orange"] },
+    { "name": "Blueboon",                   "roaster": "Sightglass",      "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Chocolate","Mandarin","Floral"] },
+
+    { "name": "Dharma Espresso",            "roaster": "Temple",          "roastLevel": 6, "origin": "Blend", "tastingNotes": ["Cherry","Cocoa","Spice"] },
+    { "name": "Caldera Dark",               "roaster": "Temple",          "roastLevel": 8, "origin": "Blend", "tastingNotes": ["Chocolate","Spice"] },
+
+    { "name": "WBC World's Best Espresso",  "roaster": "Klatch",          "roastLevel": 7, "origin": "Blend", "tastingNotes": ["Chocolate","Orange","Berry"] },
+
+    { "name": "Brooklyn",                   "roaster": "Partners",        "roastLevel": 5, "origin": "Latin America", "tastingNotes": ["Chocolate","Toffee","Dried Fruit"] },
+
+    { "name": "The Classic",                "roaster": "Black & White",   "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Caramel","Stone Fruit","Chocolate"] },
+
+    { "name": "Stereo",                     "roaster": "Heart",           "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Berry","Cocoa","Caramel"] },
+
+    { "name": "Third Coast Espresso",       "roaster": "Madcap",          "roastLevel": 6, "origin": "Blend", "tastingNotes": ["Berry","Chocolate"] },
+
+    { "name": "Creamery Blend",             "roaster": "Ruby",            "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Cherry","Fig","Chocolate"] },
+
+    { "name": "The Answer",                 "roaster": "Cat & Cloud",     "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Fruity","Chocolate","Caramel"] },
+    { "name": "The Truth",                  "roaster": "Cat & Cloud",     "roastLevel": 5, "origin": "Blend", "tastingNotes": ["White Chocolate","Cherry","Orange"] },
+
+    { "name": "S.O. Blend",                 "roaster": "Coava",           "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Chocolate","Toffee"] },
+
+    { "name": "Hometown",                   "roaster": "Sweet Bloom",     "roastLevel": 5, "origin": "Colombia & Ethiopia", "tastingNotes": ["Blackberry","Praline","Cocoa"] },
+
+    { "name": "Stowaway Espresso",          "roaster": "Passenger",       "roastLevel": 4, "origin": "Blend", "tastingNotes": ["Cocoa","Brown Sugar","Floral"] },
+    { "name": "Keystone",                   "roaster": "Passenger",       "roastLevel": 4, "origin": "Blend", "tastingNotes": ["Caramel","Berry","Floral"] },
+
+    { "name": "Triple Double",              "roaster": "Wrecking Ball",   "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Caramel","Chocolate"] },
+
+    { "name": "Thesis",                     "roaster": "Ceremony",        "roastLevel": 4, "origin": "Blend", "tastingNotes": ["Chocolate","Brown Sugar","Caramel"] },
+
+    { "name": "Colossus",                   "roaster": "Metric",          "roastLevel": 7, "origin": "Blend", "tastingNotes": ["Chocolate","Vanilla","Spice"] },
+
+    { "name": "Toro",                       "roaster": "Devoción",        "process": "Washed", "roastLevel": 5, "origin": "Colombia", "tastingNotes": ["Nutty","Cherry","Chocolate"] },
+    { "name": "Wild Forest",                "roaster": "Devoción",        "roastLevel": 3, "origin": "Colombia", "tastingNotes": ["Berry","Cherry","Cocoa"] },
+
+    { "name": "Heartbreaker",               "roaster": "Café Grumpy",     "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Chocolate","Blackberry","Almond"] },
+
+    { "name": "Bulldog Espresso",           "roaster": "PT's",            "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Chocolate","Honey"] },
+
+    { "name": "Galactic Standard",          "roaster": "Brandywine",      "roastLevel": 4, "origin": "Blend", "tastingNotes": ["Berry","Citrus","Chocolate"] },
+
+    { "name": "Old Crow Cuppa Joe",         "roaster": "Red Rooster",     "roastLevel": 7, "origin": "Blend", "tastingNotes": ["Chocolate","Cherry","Almond"] },
+    { "name": "Waxwing",                    "roaster": "Red Rooster",     "roastLevel": 7, "origin": "Blend", "tastingNotes": ["Chocolate","Lime","Orange"] },
+
+    { "name": "Driftless",                  "roaster": "Wonderstate",     "roastLevel": 7, "origin": "Peru", "tastingNotes": ["Plum","Toffee","Cocoa"] },
+
+    { "name": "Monkey Bite Espresso",       "roaster": "Bird Rock",       "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Brown Sugar","Apricot","Butterscotch"] },
+
+    { "name": "Rock the House",             "roaster": "JBC",             "roastLevel": 3, "origin": "Blend", "tastingNotes": ["Hibiscus","Hazelnut","Peach"] },
+
+    { "name": "Venice",                     "roaster": "Groundwork",      "roastLevel": 8, "origin": "Blend", "tastingNotes": ["Chocolate","Marshmallow"] },
+    { "name": "Lucky Jack",                 "roaster": "Groundwork",      "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Caramel","Citrus","Molasses"] },
+    { "name": "Black Gold",                 "roaster": "Groundwork",      "roastLevel": 8, "origin": "Blend", "tastingNotes": ["Chocolate","Hazelnut","Berry"] },
+
+    { "name": "Zip Zinger",                 "roaster": "Dune",            "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Chocolate","Stone Fruit"] },
+
+    { "name": "9 Swans",                    "roaster": "Elm",             "roastLevel": 3, "origin": "Blend", "tastingNotes": ["Cocoa","Nougat","Cherry"] },
+
+    { "name": "Espresso Dolce",             "roaster": "Espresso Vivace", "roastLevel": 6, "origin": "Blend", "tastingNotes": ["Chocolate","Floral","Caramel"] },
+
+    { "name": "Espresso Paladino",          "roaster": "Zoka",            "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Chocolate","Citrus","Walnut"] },
+
+    { "name": "Espresso Crema Dolce",       "roaster": "Dragonfly",       "roastLevel": 6, "origin": "Blend", "tastingNotes": ["Chocolate","Caramel","Spice"] },
+
+    { "name": "Neon Espresso",              "roaster": "Dogwood",         "roastLevel": 4, "origin": "Blend", "tastingNotes": ["Citrus","Floral"] },
+
+    { "name": "Orion",                      "roaster": "Spyhouse",        "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Chocolate","Berry","Citrus"] },
+
+    { "name": "(413)",                      "roaster": "Barrington",      "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Cherry","Molasses","Strawberry"] },
+    { "name": "Barrington Gold Espresso",   "roaster": "Barrington",      "roastLevel": 6, "origin": "Blend", "tastingNotes": ["Chocolate","Lemon","Caramel"] },
+
+    { "name": "Streamline Espresso",        "roaster": "Victrola",        "roastLevel": 5, "origin": "Blend", "tastingNotes": ["Chocolate","Hazelnut","Pear"] },
+    { "name": "Empire",                     "roaster": "Victrola",        "roastLevel": 6, "origin": "Blend", "tastingNotes": ["Chocolate","Caramel"] }
   ]
 }
