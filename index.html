@@ -1547,18 +1547,16 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
 
   const bean = beans.find(b => b.name===f.beanName);
   const dialed = !initial.id && bean ? (dialedMap(bean)||{})[f.method] : null;
-  const applyDialed = () => setF(p => ({ ...p,
-    grinder: dialed.grinder || p.grinder, machine: dialed.machine || p.machine,
-    dose: dialed.dose, water: dialed.water, temp: dialed.temp, brewTime: dialed.brewTime,
-    grindSize: dialed.grindSize, ratio: dialed.ratio, recipe: dialed.recipe || p.recipe }));
+  const applyDialed = () => setF(p => {
+    const merged = { ...p };
+    Object.keys(dialed).forEach(k => { if (dialed[k] !== undefined && dialed[k] !== '') merged[k] = dialed[k]; });
+    return merged;
+  });
 
-  const params = isEsp
-    ? [['Dose (g)','dose','18g'],['Yield (g)','water','36g'],
-       ['Water Temp','temp','93°C'],['Shot Time','brewTime','28s'],
-       ['Grind Size','grindSize',grindPh],['Ratio','ratio','1:2']]
-    : [['Dose (g)','dose','15g'],['Water (ml)','water','250ml'],
-       ['Water Temp','temp','92°C'],['Brew Time','brewTime','3:30'],
-       ['Grind Size','grindSize',grindPh],['Ratio','ratio','1:16']];
+  // Fields are driven by the selected method's schema; the grind field's
+  // placeholder is overridden with the active grinder's suggestion.
+  const params = getMethodSchema(f.method).fields.map(([lbl, key, ph, type]) =>
+    [lbl, key, type === 'grind' ? grindPh : ph, type]);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
