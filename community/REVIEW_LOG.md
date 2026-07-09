@@ -2,9 +2,19 @@
 
 Record of every inbox-processing pass: what was submitted, what was decided,
 and why. Newest entries at the top. This file is the audit trail for
-`community/beans.json`, `gear.json`, and `recipes.json` — every change to
-those files should trace back to an entry here (or to a direct manual edit
-noted as such).
+`community/beans.json`, `gear.json`, `recipes.json`, and `vocab.json` — every
+change to those files should trace back to an entry here (or to a direct manual
+edit noted as such).
+
+## Data shapes
+
+- **bean** submission `payload`: `name`, `roaster`, `origin`, `process`,
+  `roastLevel` (0–10), `tastingNotes` (array — the *roaster's printed* notes, not
+  the submitter's personal ratings). `origin` and `tastingNotes` are optional; a
+  catalog bean item omits any field it lacks.
+- **vocab.json**: the canonical, reviewed vocabulary the app pulls in as suggestion
+  presets — `{ tastingNotes: [...], processes: [...] }`. This is the feedback loop:
+  approved terms here reduce how often users/scan coin new ones.
 
 ## Review process
 
@@ -14,12 +24,33 @@ For each pending submission:
 2. **Verify** — web search for the roaster/product/gear; confirm it's real
    and cross-check the submitted fields (process, roast character, grind
    adjustment type, etc.) against what the source says.
-3. **Decide** — `included` (confirmed, added as submitted or with corrected
+3. **Normalize the vocabulary** (beans):
+   - **Process** — must be one of `vocab.json.processes`. Map near-synonyms to the
+     canonical term ("fully washed"/"wet process" → `Washed`); if a genuinely new,
+     legitimate method appears (e.g. "Carbonic Maceration"), add it to
+     `vocab.json.processes` and bump that file's version.
+   - **Tasting notes** — dedup each term case-insensitively against
+     `vocab.json.tastingNotes`; merge near-duplicates to the canonical spelling
+     ("blueberries" → `Blueberry`). Promote genuinely-new, sensible terms into
+     `vocab.json.tastingNotes` (bump version) so they feed back to the app; drop junk.
+4. **Decide** — `included` (confirmed, added as submitted or with corrected
    fields), `included (unverified field)` (source confirms the item exists
    but couldn't confirm every field — noted explicitly), or `rejected`
    (no matching real-world item found, or contradicted by the source).
-4. **Apply** — update the relevant JSON file, mark the Supabase row
-   `approved` or `rejected`.
+5. **Apply** — update the relevant JSON file(s), bump their `version`, and mark
+   the Supabase row `approved` or `rejected`.
+
+---
+
+## 2026-07-06 — catalog shape extended (manual)
+
+No inbox pass. Extended the bean shape to carry optional `origin` and
+`tastingNotes`, and introduced `community/vocab.json` (seeded from the app's
+built-in `TASTING_NOTES` + `PROCESS_TYPES`). Enriched the existing **Velvet Blaze**
+(Summer Moon) entry with `origin: "Blend (7 origins)"` and
+`tastingNotes: ["Walnut","Blackberry","Chocolate"]` — verified during the
+2026-07-03 pass (web sources described it as a 7-origin blend with roasted walnut,
+blackberry, and milk chocolate). `beans.json` v2 → v3.
 
 ---
 

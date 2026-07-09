@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "updated": "2026-07-03",
+  "version": 3,
+  "updated": "2026-07-06",
   "items": [
     { "name": "Hair Bender",                "roaster": "Stumptown",       "process": "Washed",  "roastLevel": 5 },
     { "name": "Big Trouble",                "roaster": "Counter Culture", "process": "Washed",  "roastLevel": 5 },
@@ -10,6 +10,6 @@
     { "name": "Monarch",                    "roaster": "Onyx Coffee Lab", "process": "Natural", "roastLevel": 8 },
     { "name": "Hologram",                   "roaster": "Counter Culture", "process": "Washed",  "roastLevel": 4 },
     { "name": "Giant Steps",                "roaster": "Blue Bottle",     "process": "Washed",  "roastLevel": 8 },
-    { "name": "Velvet Blaze",               "roaster": "Summer Moon",     "process": "Washed",  "roastLevel": 6 }
+    { "name": "Velvet Blaze",               "roaster": "Summer Moon",     "process": "Washed",  "roastLevel": 6, "origin": "Blend (7 origins)", "tastingNotes": ["Walnut","Blackberry","Chocolate"] }
   ]
 }
