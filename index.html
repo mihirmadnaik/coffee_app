@@ -38,8 +38,14 @@
       to   { transform: translateY(0);    opacity: 1; }
     }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes stageFlash {
+      0% { background: rgba(212,151,106,0); }
+      35% { background: rgba(212,151,106,0.35); }
+      100% { background: rgba(212,151,106,0); }
+    }
     .slide-up { animation: slideUp 0.28s cubic-bezier(0.32,0.72,0,1) forwards; }
     .fade-in  { animation: fadeIn  0.2s ease forwards; }
+    .stage-flash { animation: stageFlash 0.7s ease forwards; }
   </style>
 </head>
 <body>
@@ -162,6 +168,108 @@ function buildSteps(r) {
     { at:total, label:'Draw down' },
   ];
 }
+
+// ── Audio cue ─────────────────────────────────────────────────────────────────
+// Short two-tone chime via Web Audio; created lazily on first use (a user gesture,
+// e.g. starting the timer, so the AudioContext is allowed to play).
+let _audioCtx = null;
+function beep() {
+  try {
+    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _audioCtx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    [[0, 880], [0.18, 1175]].forEach(([t, freq]) => {
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now + t);
+      gain.gain.exponentialRampToValueAtTime(0.25, now + t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.16);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(now + t); osc.stop(now + t + 0.17);
+    });
+  } catch (e) {}
+}
+
+// ── Brew method schemas ───────────────────────────────────────────────────────
+// Each method maps to { fields, workflow }. `fields` is [label, key, placeholder,
+// type?] where type ∈ 'text'(default) | 'time'(mm:ss) | 'grind'(numeric-clamp
+// input, placeholder overridden by the active grinder). `workflow(f)` derives the
+// timer stages from the entered params: { id, label, cue, kind, seconds } where
+// kind is 'timed' (counts down `seconds`) or 'manual' (a gate that waits for a tap).
+// Espresso keeps yield in `water` and shot time in `brewTime` for back-compat.
+const METHOD_SCHEMAS = {
+  'V60': {
+    fields: [
+      ['Dose (g)','dose','15g'], ['Water (ml)','water','250ml'],
+      ['Water Temp','temp','94°C'], ['Grind Size','grindSize','Medium','grind'],
+      ['Ratio','ratio','1:16'], ['Bloom (g)','bloomWater','40g'],
+      ['Bloom Time','bloomTime','0:45','time'], ['Brew Time','brewTime','3:00','time'],
+      ['Pours','pours','3'],
+    ],
+    workflow: f => {
+      const total = parseTimeStr(f.brewTime) || 180;
+      const bloomS = parseTimeStr(f.bloomTime) || 45;
+      const dose = parseFloat(f.dose) || 0;
+      const bloomG = parseFloat(f.bloomWater) || (dose ? Math.round(dose*2) : 40);
+      return [
+        { id:'bloom', kind:'timed', seconds:bloomS, label:'Bloom', cue:`Pour ${bloomG}g, saturate & wait` },
+        { id:'pour',  kind:'timed', seconds:Math.max(total-bloomS,30), label:'Pour', cue:f.water?`Pour in stages up to ${f.water}`:'Pour in stages' },
+        { id:'draw',  kind:'manual', label:'Draw down', cue:'Let it draw down, then serve' },
+      ];
+    },
+  },
+  'French Press': {
+    fields: [
+      ['Dose (g)','dose','30g'], ['Water (ml)','water','500ml'],
+      ['Water Temp','temp','95°C'], ['Grind Size','grindSize','Coarse','grind'],
+      ['Ratio','ratio','1:16'], ['Steep Time','steepTime','4:00','time'],
+      ['2nd Steep','secondSteep','1:30','time'],
+    ],
+    workflow: f => {
+      const s1 = parseTimeStr(f.steepTime) || 240;
+      const s2 = parseTimeStr(f.secondSteep);
+      const stages = [
+        { id:'steep', kind:'timed', seconds:s1, label:'Steep', cue:f.water?`Add ${f.water}, saturate grounds`:'Add water, saturate grounds' },
+        { id:'skim',  kind:'manual', label:'Stir & skim', cue:'Break the crust, skim the foam' },
+      ];
+      if (s2) stages.push({ id:'steep2', kind:'timed', seconds:s2, label:'Finish steep', cue:'Let it steep' });
+      stages.push({ id:'plunge', kind:'manual', label:'Plunge & serve', cue:'Press slowly & pour' });
+      return stages;
+    },
+  },
+  'Espresso': {
+    fields: [
+      ['Dose In (g)','dose','18g'], ['Yield Out (g)','water','36g'],
+      ['Water Temp','temp','93°C'], ['Shot Time','brewTime','28s','time'],
+      ['Grind Size','grindSize','Fine','grind'], ['Ratio','ratio','1:2'],
+      ['Pre-infusion','preInfusion','5s','time'], ['Pressure (bar)','pressure','9'],
+      ['Basket','basket','double'],
+    ],
+    workflow: f => {
+      const pi = parseTimeStr(f.preInfusion);
+      const shot = parseTimeStr(f.brewTime) || 28;
+      const stages = [];
+      if (pi) stages.push({ id:'preinf', kind:'timed', seconds:pi, label:'Pre-infusion', cue:'Low-pressure saturation' });
+      stages.push({ id:'shot', kind:'timed', seconds:shot, label:'Pull shot', cue:f.water?`Target ${f.water} out`:'Pull the shot' });
+      return stages;
+    },
+  },
+};
+const GENERIC_SCHEMA = {
+  fields: [
+    ['Dose (g)','dose','15g'], ['Water (ml)','water','250ml'],
+    ['Water Temp','temp','92°C'], ['Brew Time','brewTime','3:30','time'],
+    ['Grind Size','grindSize','Medium-fine','grind'], ['Ratio','ratio','1:16'],
+  ],
+  workflow: r => {
+    const steps = buildSteps(r);
+    const total = parseTimeStr(r.brewTime) || (steps.length ? steps[steps.length-1].at : 0);
+    return steps.map((s,i) => ({ id:'s'+i, kind:'timed', label:s.label, cue:s.label,
+      seconds: Math.max((i < steps.length-1 ? steps[i+1].at : total) - s.at, 5) }));
+  },
+};
+function getMethodSchema(method) { return METHOD_SCHEMAS[method] || GENERIC_SCHEMA; }
 
 // ── Geo / map utilities ───────────────────────────────────────────────────────
 function haversineM(lat1, lon1, lat2, lon2) {
@@ -1394,7 +1502,9 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
   const machines     = gear.filter(g => g.c==='machine');
   const ownedMethods = [...new Set(gear.flatMap(g => g.m||[]))];
   const defaults = { beanName:'', roaster:'', method:'V60', grinder:'', machine:'', dose:'', water:'',
-    temp:'', brewTime:'', grindSize:'', ratio:'', tastingNotes:[], rating:0, whatIdChange:'', recipe:'' };
+    temp:'', brewTime:'', grindSize:'', ratio:'', tastingNotes:[], rating:0, whatIdChange:'', recipe:'',
+    // method-specific params (used by METHOD_SCHEMAS; empty for methods that don't need them)
+    bloomWater:'', bloomTime:'', pours:'', steepTime:'', secondSteep:'', preInfusion:'', pressure:'', basket:'' };
   const initObj = { ...defaults,
     ...(ownedMethods.length && !initial.method  ? { method:  ownedMethods[0] } : {}),
     ...(grinders.length===1 && !initial.grinder ? { grinder: grinders[0].n }   : {}),
