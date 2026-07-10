@@ -2002,16 +2002,11 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
 // ── Bean Library ─────────────────────────────────────────────────────────────
 const BEAN_COLORS = ['#6B8FA8','#A8836B','#7A8A6A','#9A7A8A','#8A9A7A'];
 
-function BeanAvatar({ color }) {
+function BeanAvatar({ bean }) {
+  // roast-gradient swatch, per the reference's bean card
   return (
-    <div style={{ width:42, height:42, borderRadius:10, flexShrink:0,
-      background:P.cardBg, border:'0.5px solid '+P.cardStroke,
-      display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <svg width="22" height="22" viewBox="0 0 20 20">
-        <ellipse cx="10" cy="10" rx="7" ry="9" fill={color} opacity="0.55" />
-        <path d="M10 2 Q14 10 10 18" stroke={color} strokeWidth="1.2" fill="none" opacity="0.9" />
-      </svg>
-    </div>
+    <div style={{ width:42, height:42, borderRadius:12, flexShrink:0,
+      background:`linear-gradient(135deg,#D9B676,${(bean && roastColor(bean.roastLevel))||'#9A5A32'})` }} />
   );
 }
 
@@ -2210,7 +2205,7 @@ function BeanLibrary({ beans, onTab, onAdd, onAddBean, onBeanPress }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
       <div style={{ padding:'18px 16px 12px', paddingTop:'calc(18px + env(safe-area-inset-top))' }}>
-        <div style={{ fontSize:28, fontWeight:500, color:P.headerText, fontFamily:'Hanken Grotesk, sans-serif', lineHeight:1 }}>Bean Library</div>
+        <div style={{ fontSize:26, fontWeight:700, letterSpacing:'-0.02em', color:P.headerText, lineHeight:1 }}>Bean Library</div>
         <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:4 }}>
           {beans.length} bean{beans.length!==1?'s':''} tracked
         </div>
@@ -2233,7 +2228,7 @@ function BeanLibrary({ beans, onTab, onAdd, onAddBean, onBeanPress }) {
           <div key={i} onClick={()=>onBeanPress&&onBeanPress(b)}
             style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, cursor:'pointer',
             borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'center', gap:12, marginBottom:8 }}>
-            <BeanAvatar color={b.color} />
+            <BeanAvatar bean={b} />
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:15, fontWeight:500, color:P.headerText,
                 fontFamily:'Hanken Grotesk, sans-serif',
@@ -2804,15 +2799,14 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
   const dateStr = new Date(entry.date).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
-      <div style={{ padding:'8px 16px', paddingTop:'calc(8px + env(safe-area-inset-top))',
+      <div style={{ padding:'10px 20px 12px', paddingTop:'calc(10px + env(safe-area-inset-top))',
         display:'flex', justifyContent:'space-between', alignItems:'center',
-        borderBottom:'0.5px solid #ECE7DE', background:P.bg, flexShrink:0 }}>
-        <div onClick={onBack} style={{ fontSize:11, color:P.cafe, cursor:'pointer', padding:'4px 0' }}>← Back</div>
-        <div style={{ fontSize:13, fontWeight:500, color:G.text,
-          fontFamily:'Hanken Grotesk, sans-serif', letterSpacing:'0.04em' }}>
+        borderBottom:'1px solid '+P.line, background:P.bg, flexShrink:0 }}>
+        <div onClick={onBack} style={{ fontSize:13, color:P.headerMuted, cursor:'pointer', padding:'4px 0' }}>← Back</div>
+        <div style={{ fontSize:15, fontWeight:600, color:P.headerText }}>
           {isBrew ? 'Home Brew' : 'Café Visit'}
         </div>
-        <div onClick={onEdit} style={{ fontSize:11, color:P.cafe, fontWeight:600, cursor:'pointer', padding:'4px 0' }}>Edit</div>
+        <div onClick={onEdit} style={{ fontSize:13, color:P.acc, fontWeight:600, cursor:'pointer', padding:'4px 0' }}>Edit</div>
       </div>
       <div className="scroll-y" style={{ flex:1, padding:'16px' }}>
         <div style={{ marginBottom:16 }}>
@@ -2860,11 +2854,13 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
               if (!rows.length) return null;
               return (
                 <><FormDivider /><SectionHead label="Parameters" /><div style={{height:6}}/>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                  <div style={{ background:P.cardBg, border:'1px solid '+P.cardStroke, borderRadius:14,
+                    padding:'4px 14px', marginBottom:10, display:'grid', gridTemplateColumns:'1fr 1fr',
+                    columnGap:14 }}>
                     {rows.map(([l,v])=>(
-                      <div key={l}>
-                        <div style={{fontSize:8,color:G.label,fontFamily:'IBM Plex Mono, monospace',letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:2}}>{l}</div>
-                        <div style={{fontSize:13,color:G.text,fontFamily:'IBM Plex Mono, monospace',fontWeight:300}}>{v}</div>
+                      <div key={l} style={{ padding:'9px 0', borderBottom:'0.5px solid '+P.line }}>
+                        <FieldLabel style={{ marginBottom:3 }}>{l}</FieldLabel>
+                        <div style={{ fontSize:14, color:P.headerText, fontWeight:500 }}>{v}</div>
                       </div>
                     ))}
                   </div>
@@ -2875,12 +2871,12 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
             {entry.rating>0 && <div style={{marginBottom:10}}><div style={{fontSize:9,color:G.label,fontFamily:'IBM Plex Mono, monospace',marginBottom:6,letterSpacing:'0.1em',textTransform:'uppercase'}}>Rating</div><RatingSquares n={entry.rating} size={16} /></div>}
             <div style={{ display:'flex', gap:8, marginTop:6, marginBottom:10 }}>
               <div onClick={()=>onStartTimer && onStartTimer(entry)}
-                style={{ flex:1, background:P.brew, borderRadius:10, padding:'10px', textAlign:'center', cursor:'pointer' }}>
-                <span style={{ fontSize:10, color:'#fff', fontFamily:'IBM Plex Mono, monospace' }}>▶ brew with timer</span>
+                style={{ flex:1, background:P.acc, borderRadius:11, padding:'10px', textAlign:'center', cursor:'pointer' }}>
+                <span style={{ fontSize:11.5, fontWeight:600, color:'#fff' }}>▶ Brew with timer</span>
               </div>
               <div onClick={()=>onBrewAgain && onBrewAgain(entry)}
-                style={{ flex:1, border:'1px solid '+P.brew, borderRadius:10, padding:'10px', textAlign:'center', cursor:'pointer' }}>
-                <span style={{ fontSize:10, color:P.brew, fontFamily:'IBM Plex Mono, monospace' }}>↻ log again</span>
+                style={{ flex:1, border:'1px solid '+P.acc, borderRadius:11, padding:'10px', textAlign:'center', cursor:'pointer' }}>
+                <span style={{ fontSize:11.5, fontWeight:600, color:P.acc }}>↻ Log again</span>
               </div>
             </div>
             {canPin && (
@@ -2927,16 +2923,16 @@ function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow, communityReci
     r.beanName.toLowerCase()===bean.name.toLowerCase()).slice(0,3);
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
-      <div style={{ padding:'8px 16px', paddingTop:'calc(8px + env(safe-area-inset-top))',
+      <div style={{ padding:'10px 20px 12px', paddingTop:'calc(10px + env(safe-area-inset-top))',
         display:'flex', justifyContent:'space-between', alignItems:'center',
-        borderBottom:'0.5px solid #ECE7DE', background:P.bg, flexShrink:0 }}>
-        <div onClick={onBack} style={{ fontSize:11, color:P.cafe, cursor:'pointer', padding:'4px 0' }}>← Back</div>
-        <div style={{ fontSize:13, fontWeight:500, color:G.text, fontFamily:'Hanken Grotesk, sans-serif' }}>Bean Detail</div>
-        <div onClick={onEdit} style={{ fontSize:11, color:P.cafe, fontWeight:600, cursor:'pointer', padding:'4px 0' }}>Edit</div>
+        borderBottom:'1px solid '+P.line, background:P.bg, flexShrink:0 }}>
+        <div onClick={onBack} style={{ fontSize:13, color:P.headerMuted, cursor:'pointer', padding:'4px 0' }}>← Back</div>
+        <div style={{ fontSize:15, fontWeight:600, color:P.headerText }}>Bean Detail</div>
+        <div onClick={onEdit} style={{ fontSize:13, color:P.acc, fontWeight:600, cursor:'pointer', padding:'4px 0' }}>Edit</div>
       </div>
       <div className="scroll-y" style={{ flex:1, padding:'16px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:20 }}>
-          <BeanAvatar color={bean.color||'#6B8FA8'} />
+          <BeanAvatar bean={bean} />
           <div>
             <div style={{ fontSize:22, fontWeight:500, color:P.headerText, fontFamily:'Hanken Grotesk, sans-serif', lineHeight:1.2 }}>{bean.name}</div>
             {bean.roaster && <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:4 }}>{bean.roaster}</div>}
@@ -2964,7 +2960,7 @@ function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow, communityReci
                 const n = i+1;
                 const c = n<=3?'#C8A66A':n<=7?'#8B5530':'#3D1A06';
                 return <div key={n} style={{ flex:1, height:8, borderRadius:2,
-                  background: bean.roastLevel>=n ? c : G.surface }} />;
+                  background: bean.roastLevel>=n ? c : P.bgDeep }} />;
               })}
             </div>
             <div style={{ display:'flex', justifyContent:'space-between' }}>
@@ -3009,8 +3005,8 @@ function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow, communityReci
                     ))}
                   </div>
                   <div onClick={()=>onBrewNow && onBrewNow({ ...d, method, beanName:bean.name, roaster:bean.roaster||'' })}
-                    style={{ background:P.brew, borderRadius:9, padding:'10px', textAlign:'center', cursor:'pointer' }}>
-                    <span style={{ fontSize:11, color:'#fff', fontFamily:'IBM Plex Mono, monospace' }}>▶ brew now</span>
+                    style={{ background:P.acc, borderRadius:11, padding:'10px', textAlign:'center', cursor:'pointer' }}>
+                    <span style={{ fontSize:11.5, fontWeight:600, color:'#fff' }}>▶ Brew now</span>
                   </div>
                 </div>
               ))}
