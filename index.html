@@ -1561,11 +1561,12 @@ function QuickCaptureSheet({ onClose, onSave, onExpand, beans=[], gear=[] }) {
         <div style={{ width:36, height:3, background:P.cardStroke, borderRadius:3, margin:'10px auto 14px' }} />
         <div style={{ display:'flex', gap:8, marginBottom:16 }}>
           {[['cafe','Café Visit'],['brew','Home Brew']].map(([val,lbl])=>(
-            <div key={val} onClick={()=>setType(val)} style={{ padding:'6px 16px', borderRadius:20,
-              fontSize:11, cursor:'pointer', fontFamily:'IBM Plex Mono, monospace', fontWeight:300,
-              background: type===val ? P.cafe : 'transparent',
+            <div key={val} onClick={()=>setType(val)} style={{ padding:'7px 16px', borderRadius:20,
+              fontSize:11.5, cursor:'pointer', fontWeight:600,
+              background: type===val ? (val==='cafe'?P.cafe:P.brew) : 'transparent',
               color: type===val ? '#fff' : P.cardMuted,
-              border:'1px solid '+(type===val ? P.cafe : P.cardStroke), transition:'all 0.15s' }}>
+              border:'1px solid '+(type===val ? (val==='cafe'?P.cafe:P.brew) : P.cardStroke),
+              transition:'all 0.15s' }}>
               {lbl}
             </div>
           ))}
@@ -1598,13 +1599,12 @@ function QuickCaptureSheet({ onClose, onSave, onExpand, beans=[], gear=[] }) {
           <RatingSquares n={rating} size={20} onChange={setRating} />
         </div>
         <div onClick={()=>onExpand(type,{cafeName,drinkType,beanName,method,rating})}
-          style={{ textAlign:'center', padding:'8px 0', borderTop:'0.5px solid '+P.cardStroke, marginBottom:10, cursor:'pointer' }}>
-          <span style={{ fontSize:10, color:P.cafe, fontFamily:'IBM Plex Mono, monospace' }}>+ add more details</span>
+          style={{ textAlign:'center', padding:'8px 0', borderTop:'1px solid '+P.line, marginBottom:10, cursor:'pointer' }}>
+          <span style={{ fontSize:11, color:P.acc, fontWeight:600 }}>+ add more details</span>
         </div>
-        <div onClick={handleSave} style={{ background:P.cafe, borderRadius:10, padding:'13px',
-          textAlign:'center', marginBottom:12, cursor:'pointer',
-          boxShadow:'0 3px 10px rgba(40,30,20,0.30)' }}>
-          <span style={{ color:'#fff', fontSize:12, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.04em' }}>save entry</span>
+        <div onClick={handleSave} style={{ background: type==='cafe'?P.cafe:P.brew, borderRadius:15, padding:'14px',
+          textAlign:'center', marginBottom:12, cursor:'pointer', boxShadow:P.shadowBtn }}>
+          <span style={{ color:'#fff', fontSize:15, fontWeight:600 }}>Save entry</span>
         </div>
       </div>
     </div>
@@ -1676,7 +1676,12 @@ function CafeForm({ initial={}, onBack, onSave, onUpdate, customNotes=[], onAddN
           <span style={{ fontSize:12, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>Would visit again</span>
         </div>
         <GhostField label="Notes" placeholder="Anything else to remember…" value={f.notes} onChange={v=>set('notes',v)} multiline />
-        <div style={{ height:32 }} />
+        <div style={{ height:24 }} />
+      </div>
+      <div style={{ padding:'10px 20px calc(12px + env(safe-area-inset-bottom))',
+        background:P.bg, borderTop:'1px solid '+P.line, flexShrink:0 }}>
+        <PrimaryButton label={initial.id ? 'Save changes' : 'Save visit'} onPress={handleSave}
+          style={{ background:P.cafe }} />
       </div>
     </div>
   );
@@ -2189,6 +2194,11 @@ function AddBeanForm({ initial={}, onBack, onSave, onUpdate, communityBeans=[], 
             </div>
           </div>
         )}
+        <div style={{ height:8 }} />
+      </div>
+      <div style={{ padding:'10px 20px calc(12px + env(safe-area-inset-bottom))',
+        background:P.bg, borderTop:'1px solid '+P.line, flexShrink:0 }}>
+        <PrimaryButton label={initial.id ? 'Save changes' : 'Save bean'} onPress={handleSave} />
       </div>
     </div>
   );
@@ -2301,14 +2311,14 @@ function StatsDash({ entries, onTab, onAdd }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
       <div style={{ padding:'18px 16px 12px', paddingTop:'calc(18px + env(safe-area-inset-top))' }}>
-        <div style={{ fontSize:28, fontWeight:500, color:P.headerText, fontFamily:'Hanken Grotesk, sans-serif', lineHeight:1 }}>Insights</div>
+        <div style={{ fontSize:26, fontWeight:700, letterSpacing:'-0.02em', color:P.headerText, lineHeight:1 }}>Insights</div>
         <div style={{ display:'inline-flex', marginTop:12, background:P.cardBg,
-          border:'0.5px solid '+P.cardStroke, borderRadius:20, padding:3, gap:2 }}>
+          border:'1px solid '+P.line, borderRadius:20, padding:3, gap:2 }}>
           {[['month','This Month'],['all','All Time']].map(([val,lbl])=>(
-            <div key={val} onClick={()=>setPeriod(val)} style={{ fontFamily:'IBM Plex Mono, monospace', fontSize:9,
+            <div key={val} onClick={()=>setPeriod(val)} style={{ fontSize:10.5, fontWeight:600,
               padding:'4px 12px', borderRadius:16, cursor:'pointer', transition:'all 0.15s',
-              background: period===val?P.cardBg2:'transparent',
-              color: period===val?P.headerText:P.headerMuted }}>{lbl}</div>
+              background: period===val?P.acc:'transparent',
+              color: period===val?'#fff':P.headerMuted }}>{lbl}</div>
           ))}
         </div>
       </div>

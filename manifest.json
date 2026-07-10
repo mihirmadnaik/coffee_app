@@ -5,8 +5,8 @@
   "start_url": "/coffee_app/",
   "scope": "/coffee_app/",
   "display": "standalone",
-  "background_color": "#182635",
-  "theme_color": "#182635",
+  "background_color": "#FBFAF8",
+  "theme_color": "#FBFAF8",
   "orientation": "portrait",
   "icons": [
     {
