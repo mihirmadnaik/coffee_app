@@ -38,8 +38,14 @@
       to   { transform: translateY(0);    opacity: 1; }
     }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes stageFlash {
+      0% { background: rgba(212,151,106,0); }
+      35% { background: rgba(212,151,106,0.35); }
+      100% { background: rgba(212,151,106,0); }
+    }
     .slide-up { animation: slideUp 0.28s cubic-bezier(0.32,0.72,0,1) forwards; }
     .fade-in  { animation: fadeIn  0.2s ease forwards; }
+    .stage-flash { animation: stageFlash 0.7s ease forwards; }
   </style>
 </head>
 <body>
@@ -162,6 +168,108 @@ function buildSteps(r) {
     { at:total, label:'Draw down' },
   ];
 }
+
+// ── Audio cue ─────────────────────────────────────────────────────────────────
+// Short two-tone chime via Web Audio; created lazily on first use (a user gesture,
+// e.g. starting the timer, so the AudioContext is allowed to play).
+let _audioCtx = null;
+function beep() {
+  try {
+    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _audioCtx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    [[0, 880], [0.18, 1175]].forEach(([t, freq]) => {
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now + t);
+      gain.gain.exponentialRampToValueAtTime(0.25, now + t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.16);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(now + t); osc.stop(now + t + 0.17);
+    });
+  } catch (e) {}
+}
+
+// ── Brew method schemas ───────────────────────────────────────────────────────
+// Each method maps to { fields, workflow }. `fields` is [label, key, placeholder,
+// type?] where type ∈ 'text'(default) | 'time'(mm:ss) | 'grind'(numeric-clamp
+// input, placeholder overridden by the active grinder). `workflow(f)` derives the
+// timer stages from the entered params: { id, label, cue, kind, seconds } where
+// kind is 'timed' (counts down `seconds`) or 'manual' (a gate that waits for a tap).
+// Espresso keeps yield in `water` and shot time in `brewTime` for back-compat.
+const METHOD_SCHEMAS = {
+  'V60': {
+    fields: [
+      ['Dose (g)','dose','15g'], ['Water (ml)','water','250ml'],
+      ['Water Temp','temp','94°C'], ['Grind Size','grindSize','Medium','grind'],
+      ['Ratio','ratio','1:16'], ['Bloom (g)','bloomWater','40g'],
+      ['Bloom Time','bloomTime','0:45','time'], ['Brew Time','brewTime','3:00','time'],
+      ['Pours','pours','3'],
+    ],
+    workflow: f => {
+      const total = parseTimeStr(f.brewTime) || 180;
+      const bloomS = parseTimeStr(f.bloomTime) || 45;
+      const dose = parseFloat(f.dose) || 0;
+      const bloomG = parseFloat(f.bloomWater) || (dose ? Math.round(dose*2) : 40);
+      return [
+        { id:'bloom', kind:'timed', seconds:bloomS, label:'Bloom', cue:`Pour ${bloomG}g, saturate & wait` },
+        { id:'pour',  kind:'timed', seconds:Math.max(total-bloomS,30), label:'Pour', cue:f.water?`Pour in stages up to ${f.water}`:'Pour in stages' },
+        { id:'draw',  kind:'manual', label:'Draw down', cue:'Let it draw down, then serve' },
+      ];
+    },
+  },
+  'French Press': {
+    fields: [
+      ['Dose (g)','dose','30g'], ['Water (ml)','water','500ml'],
+      ['Water Temp','temp','95°C'], ['Grind Size','grindSize','Coarse','grind'],
+      ['Ratio','ratio','1:16'], ['Steep Time','steepTime','4:00','time'],
+      ['2nd Steep','secondSteep','1:30','time'],
+    ],
+    workflow: f => {
+      const s1 = parseTimeStr(f.steepTime) || 240;
+      const s2 = parseTimeStr(f.secondSteep);
+      const stages = [
+        { id:'steep', kind:'timed', seconds:s1, label:'Steep', cue:f.water?`Add ${f.water}, saturate grounds`:'Add water, saturate grounds' },
+        { id:'skim',  kind:'manual', label:'Stir & skim', cue:'Break the crust, skim the foam' },
+      ];
+      if (s2) stages.push({ id:'steep2', kind:'timed', seconds:s2, label:'Finish steep', cue:'Let it steep' });
+      stages.push({ id:'plunge', kind:'manual', label:'Plunge & serve', cue:'Press slowly & pour' });
+      return stages;
+    },
+  },
+  'Espresso': {
+    fields: [
+      ['Dose In (g)','dose','18g'], ['Yield Out (g)','water','36g'],
+      ['Water Temp','temp','93°C'], ['Shot Time','brewTime','28s','time'],
+      ['Grind Size','grindSize','Fine','grind'], ['Ratio','ratio','1:2'],
+      ['Pre-infusion','preInfusion','5s','time'], ['Pressure (bar)','pressure','9'],
+      ['Basket','basket','double'],
+    ],
+    workflow: f => {
+      const pi = parseTimeStr(f.preInfusion);
+      const shot = parseTimeStr(f.brewTime) || 28;
+      const stages = [];
+      if (pi) stages.push({ id:'preinf', kind:'timed', seconds:pi, label:'Pre-infusion', cue:'Low-pressure saturation' });
+      stages.push({ id:'shot', kind:'timed', seconds:shot, label:'Pull shot', cue:f.water?`Target ${f.water} out`:'Pull the shot' });
+      return stages;
+    },
+  },
+};
+const GENERIC_SCHEMA = {
+  fields: [
+    ['Dose (g)','dose','15g'], ['Water (ml)','water','250ml'],
+    ['Water Temp','temp','92°C'], ['Brew Time','brewTime','3:30','time'],
+    ['Grind Size','grindSize','Medium-fine','grind'], ['Ratio','ratio','1:16'],
+  ],
+  workflow: r => {
+    const steps = buildSteps(r);
+    const total = parseTimeStr(r.brewTime) || (steps.length ? steps[steps.length-1].at : 0);
+    return steps.map((s,i) => ({ id:'s'+i, kind:'timed', label:s.label, cue:s.label,
+      seconds: Math.max((i < steps.length-1 ? steps[i+1].at : total) - s.at, 5) }));
+  },
+};
+function getMethodSchema(method) { return METHOD_SCHEMAS[method] || GENERIC_SCHEMA; }
 
 // ── Geo / map utilities ───────────────────────────────────────────────────────
 function haversineM(lat1, lon1, lat2, lon2) {
@@ -991,15 +1099,27 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgai
 }
 
 // ── Brew Timer ────────────────────────────────────────────────────────────────
-function TimerScreen({ recipe, onCancel, onLog }) {
-  const [elapsed,  setElapsed]  = useState(0);
+function TimerScreen({ recipe, onCancel, onLog, mode='staged' }) {
+  const [elapsed,  setElapsed]  = useState(0);   // total seconds across all stages
   const [running,  setRunning]  = useState(false);
   const [finished, setFinished] = useState(false);
   const [rating,   setRating]   = useState(0);
+  const [stageIdx,   setStageIdx]   = useState(0);
+  const [stageStart, setStageStart] = useState(0); // value of `elapsed` when the current stage began
+  const [flashOn,  setFlashOn]  = useState(false);
   const startRef = useRef(0);
 
-  const steps  = buildSteps(recipe);
-  const target = parseTimeStr(recipe.brewTime);
+  const stages = getMethodSchema(recipe.method).workflow(recipe) || [];
+  const staged = mode === 'staged' && stages.length > 0;
+
+  // checklist mode: cumulative start time of each stage + total timed duration
+  let _acc = 0;
+  const checklist = stages.map(s => { const at = _acc; if (s.kind === 'timed') _acc += (s.seconds || 0); return { ...s, at }; });
+  const totalTimed = _acc;
+
+  const curStage    = stages[stageIdx];
+  const stageElapsed = elapsed - stageStart;
+  const flash = () => { setFlashOn(true); setTimeout(() => setFlashOn(false), 700); };
 
   useEffect(() => {
     if (!running) return;
@@ -1014,16 +1134,32 @@ function TimerScreen({ recipe, onCancel, onLog }) {
     return () => { if (lock) lock.release().catch(()=>{}); };
   }, []);
 
-  const curIdx = steps.reduce((acc,s,i) => elapsed >= s.at ? i : acc, 0);
-  const over   = target > 0 && elapsed > target;
+  const advance = () => {
+    if (stageIdx >= stages.length-1) { setRunning(false); setFinished(true); return; }
+    setStageIdx(i => i+1); setStageStart(elapsed);
+  };
+
+  // staged mode: auto-advance a timed stage when its countdown hits zero (chime + flash)
+  useEffect(() => {
+    if (!staged || !running || finished || !curStage) return;
+    if (curStage.kind === 'timed' && stageElapsed >= curStage.seconds) { beep(); flash(); advance(); }
+  }, [elapsed]);
+
+  const curIdx = checklist.reduce((acc,s,i) => elapsed >= s.at ? i : acc, 0);
+  const target = staged ? 0 : (parseTimeStr(recipe.brewTime) || totalTimed);
+  const over   = !staged && target > 0 && elapsed > target;
+  const stageRemain = curStage && curStage.kind === 'timed' ? Math.max(curStage.seconds - stageElapsed, 0) : 0;
 
   const handleLog = () => onLog({
     id:genId(), date:new Date().toISOString(), type:'brew',
     beanName:recipe.beanName||'', roaster:recipe.roaster||'',
     method:recipe.method||'', grinder:recipe.grinder||'', machine:recipe.machine||'', dose:recipe.dose||'', water:recipe.water||'',
     temp:recipe.temp||'', brewTime:fmtSec(elapsed), grindSize:recipe.grindSize||'',
-    ratio:recipe.ratio||'', tastingNotes:[], rating,
-    whatIdChange:'', recipe:recipe.recipe||''
+    ratio:recipe.ratio||'',
+    bloomWater:recipe.bloomWater||'', bloomTime:recipe.bloomTime||'', pours:recipe.pours||'',
+    steepTime:recipe.steepTime||'', secondSteep:recipe.secondSteep||'',
+    preInfusion:recipe.preInfusion||'', pressure:recipe.pressure||'', basket:recipe.basket||'',
+    tastingNotes:[], rating, whatIdChange:'', recipe:recipe.recipe||''
   });
 
   const params = [['dose',recipe.dose],['water',recipe.water],['temp',recipe.temp],['grind',recipe.grindSize],['grinder',recipe.grinder],['machine',recipe.machine],['ratio',recipe.ratio]].filter(([,v])=>v);
@@ -1050,26 +1186,59 @@ function TimerScreen({ recipe, onCancel, onLog }) {
             ))}
           </div>
         )}
-        <div style={{ textAlign:'center', marginBottom:18 }}>
-          <div style={{ fontSize:60, fontWeight:300, color: over ? P.cafe : P.headerText, fontFamily:'DM Mono, monospace', lineHeight:1 }}>{fmtSec(elapsed)}</div>
-          {target>0 && <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginTop:6 }}>target {fmtSec(target)}</div>}
-        </div>
 
-        {!finished && (
-          <div style={{ marginBottom:20 }}>
-            {steps.map((s,i)=>(
-              <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 10px',
-                borderRadius:8, marginBottom:3,
-                background: i===curIdx && elapsed>0 ? 'rgba(122,154,176,0.14)' : 'transparent' }}>
-                <span style={{ fontSize:9, color: i<=curIdx && elapsed>0 ? P.brew : P.headerMuted,
-                  fontFamily:'DM Mono, monospace', width:34, flexShrink:0 }}>{fmtSec(s.at)}</span>
-                <span style={{ fontSize:11, fontFamily:'DM Mono, monospace', fontWeight:300,
-                  color: i===curIdx && elapsed>0 ? G.text : P.headerMuted,
-                  opacity: i>curIdx ? 0.6 : 1 }}>{i<curIdx?'✓ ':''}{s.label}</span>
+        {staged && !finished ? (
+          <>
+            {curStage && (
+              <div className={flashOn ? 'stage-flash' : ''} style={{ textAlign:'center', marginBottom:16, borderRadius:14, padding:'10px 0' }}>
+                <div style={{ fontSize:9, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.12em', marginBottom:8 }}>
+                  STAGE {stageIdx+1}/{stages.length} · {curStage.label.toUpperCase()}
+                </div>
+                <div style={{ fontSize:60, fontWeight:300, color:P.headerText, fontFamily:'DM Mono, monospace', lineHeight:1 }}>
+                  {curStage.kind==='timed' ? fmtSec(stageRemain) : fmtSec(stageElapsed)}
+                </div>
+                <div style={{ fontSize:11, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:10, padding:'0 20px' }}>{curStage.cue}</div>
+                {curStage.kind==='manual' && <div style={{ fontSize:8.5, color:P.cafe, fontFamily:'DM Mono, monospace', marginTop:6, letterSpacing:'0.1em' }}>▸ tap “done” when finished</div>}
+                <div style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginTop:8 }}>total {fmtSec(elapsed)}</div>
               </div>
-            ))}
-          </div>
-        )}
+            )}
+            <div style={{ marginBottom:20 }}>
+              {stages.map((s,i)=>(
+                <div key={s.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 10px',
+                  borderRadius:8, marginBottom:3,
+                  background: i===stageIdx ? 'rgba(122,154,176,0.14)' : 'transparent' }}>
+                  <span style={{ fontSize:9, color: i<=stageIdx ? P.brew : P.headerMuted, fontFamily:'DM Mono, monospace', width:44, flexShrink:0 }}>
+                    {s.kind==='timed' ? fmtSec(s.seconds) : '·····'}
+                  </span>
+                  <span style={{ fontSize:11, fontFamily:'DM Mono, monospace', fontWeight:300,
+                    color: i===stageIdx ? G.text : P.headerMuted, opacity: i>stageIdx ? 0.6 : 1 }}>
+                    {i<stageIdx?'✓ ':''}{s.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : !finished ? (
+          <>
+            <div style={{ textAlign:'center', marginBottom:18 }}>
+              <div style={{ fontSize:60, fontWeight:300, color: over ? P.cafe : P.headerText, fontFamily:'DM Mono, monospace', lineHeight:1 }}>{fmtSec(elapsed)}</div>
+              {target>0 && <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginTop:6 }}>target {fmtSec(target)}</div>}
+            </div>
+            <div style={{ marginBottom:20 }}>
+              {checklist.map((s,i)=>(
+                <div key={s.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 10px',
+                  borderRadius:8, marginBottom:3,
+                  background: i===curIdx && elapsed>0 ? 'rgba(122,154,176,0.14)' : 'transparent' }}>
+                  <span style={{ fontSize:9, color: i<=curIdx && elapsed>0 ? P.brew : P.headerMuted,
+                    fontFamily:'DM Mono, monospace', width:34, flexShrink:0 }}>{fmtSec(s.at)}</span>
+                  <span style={{ fontSize:11, fontFamily:'DM Mono, monospace', fontWeight:300,
+                    color: i===curIdx && elapsed>0 ? G.text : P.headerMuted,
+                    opacity: i>curIdx ? 0.6 : 1 }}>{i<curIdx?'✓ ':''}{s.cue||s.label}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : null}
 
         <div style={{ marginTop:'auto', paddingBottom:16 }}>
           {!finished ? (
@@ -1081,7 +1250,14 @@ function TimerScreen({ recipe, onCancel, onLog }) {
                   {running ? 'pause' : elapsed>0 ? 'resume' : '▶ start'}
                 </span>
               </div>
-              {elapsed>0 && (
+              {staged && elapsed>0 && curStage && curStage.kind==='manual' ? (
+                <div onClick={()=>{ beep(); flash(); advance(); }}
+                  style={{ flex:1, background:P.brew, borderRadius:12, padding:'14px', textAlign:'center', cursor:'pointer' }}>
+                  <span style={{ fontSize:12, fontFamily:'DM Mono, monospace', color:'#182635' }}>
+                    {stageIdx>=stages.length-1 ? 'done ✓' : 'done →'}
+                  </span>
+                </div>
+              ) : elapsed>0 && (
                 <div onClick={()=>{ setRunning(false); setFinished(true); }}
                   style={{ flex:1, background:P.cafe, borderRadius:12, padding:'14px', textAlign:'center', cursor:'pointer' }}>
                   <span style={{ fontSize:12, fontFamily:'DM Mono, monospace', color:'#182635' }}>finish ✓</span>
@@ -1247,7 +1423,8 @@ function QuickCaptureSheet({ onClose, onSave, onExpand, beans=[], gear=[] }) {
       ? { ...base, cafeName, drinkType, location:'', bean:'', price:'',
           ratings:{overall:rating,aroma:0,taste:0,texture:0}, vibeTags:[], wouldVisitAgain:false }
       : { ...base, beanName, method, roaster:'', grinder:'', machine:'', dose:'', water:'', temp:'',
-          brewTime:'', grindSize:'', ratio:'', whatIdChange:'', recipe:'' };
+          brewTime:'', grindSize:'', ratio:'', whatIdChange:'', recipe:'',
+          bloomWater:'', bloomTime:'', pours:'', steepTime:'', secondSteep:'', preInfusion:'', pressure:'', basket:'' };
     onSave(entry);
   };
 
@@ -1394,7 +1571,9 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
   const machines     = gear.filter(g => g.c==='machine');
   const ownedMethods = [...new Set(gear.flatMap(g => g.m||[]))];
   const defaults = { beanName:'', roaster:'', method:'V60', grinder:'', machine:'', dose:'', water:'',
-    temp:'', brewTime:'', grindSize:'', ratio:'', tastingNotes:[], rating:0, whatIdChange:'', recipe:'' };
+    temp:'', brewTime:'', grindSize:'', ratio:'', tastingNotes:[], rating:0, whatIdChange:'', recipe:'',
+    // method-specific params (used by METHOD_SCHEMAS; empty for methods that don't need them)
+    bloomWater:'', bloomTime:'', pours:'', steepTime:'', secondSteep:'', preInfusion:'', pressure:'', basket:'' };
   const initObj = { ...defaults,
     ...(ownedMethods.length && !initial.method  ? { method:  ownedMethods[0] } : {}),
     ...(grinders.length===1 && !initial.grinder ? { grinder: grinders[0].n }   : {}),
@@ -1437,18 +1616,16 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
 
   const bean = beans.find(b => b.name===f.beanName);
   const dialed = !initial.id && bean ? (dialedMap(bean)||{})[f.method] : null;
-  const applyDialed = () => setF(p => ({ ...p,
-    grinder: dialed.grinder || p.grinder, machine: dialed.machine || p.machine,
-    dose: dialed.dose, water: dialed.water, temp: dialed.temp, brewTime: dialed.brewTime,
-    grindSize: dialed.grindSize, ratio: dialed.ratio, recipe: dialed.recipe || p.recipe }));
+  const applyDialed = () => setF(p => {
+    const merged = { ...p };
+    Object.keys(dialed).forEach(k => { if (dialed[k] !== undefined && dialed[k] !== '') merged[k] = dialed[k]; });
+    return merged;
+  });
 
-  const params = isEsp
-    ? [['Dose (g)','dose','18g'],['Yield (g)','water','36g'],
-       ['Water Temp','temp','93°C'],['Shot Time','brewTime','28s'],
-       ['Grind Size','grindSize',grindPh],['Ratio','ratio','1:2']]
-    : [['Dose (g)','dose','15g'],['Water (ml)','water','250ml'],
-       ['Water Temp','temp','92°C'],['Brew Time','brewTime','3:30'],
-       ['Grind Size','grindSize',grindPh],['Ratio','ratio','1:16']];
+  // Fields are driven by the selected method's schema; the grind field's
+  // placeholder is overridden with the active grinder's suggestion.
+  const params = getMethodSchema(f.method).fields.map(([lbl, key, ph, type]) =>
+    [lbl, key, type === 'grind' ? grindPh : ph, type]);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
@@ -2170,7 +2347,7 @@ function AccountCard({ session, syncState, lastSyncAt, onSync }) {
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, onGearRemove, gearCatalog=GEAR_CATALOG, session, syncState, lastSyncAt, onSync, onExport, onImport }) {
+function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, onGearRemove, gearCatalog=GEAR_CATALOG, session, syncState, lastSyncAt, onSync, onExport, onImport, timerMode='staged', onTimerModeChange=()=>{} }) {
   const importRef = useRef(null);
   const total = entries.length;
   const cafe  = entries.filter(e=>e.type==='cafe').length;
@@ -2210,6 +2387,24 @@ function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, on
             </div>
           );
         })()}
+        <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
+          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>Brew Timer</div>
+          <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6, marginBottom:10 }}>
+            {timerMode==='staged'
+              ? 'Guided: each stage is its own countdown that chimes when done; manual steps wait for a tap.'
+              : 'Checklist: one running clock with the method’s steps highlighted as time passes.'}
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            {[['staged','Guided'],['checklist','Checklist']].map(([val,lbl])=>(
+              <div key={val} onClick={()=>onTimerModeChange(val)}
+                style={{ flex:1, borderRadius:9, padding:'9px', textAlign:'center', cursor:'pointer',
+                  background: timerMode===val ? P.brew : 'transparent',
+                  border:'1px solid '+(timerMode===val ? P.brew : G.chipBorder) }}>
+                <span style={{ fontSize:10, fontFamily:'DM Mono, monospace', color: timerMode===val ? '#182635' : G.text }}>{lbl}</span>
+              </div>
+            ))}
+          </div>
+        </div>
         <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
           <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>Backup</div>
           <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6, marginBottom:10 }}>
@@ -2321,10 +2516,10 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
   const canPin = isBrew && onPinDialed && beans.some(b => b.name===entry.beanName);
   const shareRecipe = () => {
     if (shared) return;
-    queueShare('recipe', { beanName:entry.beanName||'', roaster:entry.roaster||'',
-      method:entry.method||'', grinder:entry.grinder||'', machine:entry.machine||'',
-      dose:entry.dose||'', water:entry.water||'', temp:entry.temp||'',
-      brewTime:entry.brewTime||'', grindSize:entry.grindSize||'', ratio:entry.ratio||'' });
+    const payload = { beanName:entry.beanName||'', roaster:entry.roaster||'',
+      method:entry.method||'', grinder:entry.grinder||'', machine:entry.machine||'' };
+    getMethodSchema(entry.method).fields.forEach(([,key]) => { payload[key] = entry[key]||''; });
+    queueShare('recipe', payload);
     setShared(true);
   };
   const title = isBrew ? (entry.beanName||'Unnamed Brew') : (entry.cafeName||'Unnamed Café');
@@ -2378,18 +2573,26 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
               <div style={{fontSize:9,color:G.label,fontFamily:'DM Mono, monospace',marginBottom:6,letterSpacing:'0.1em',textTransform:'uppercase'}}>Method</div>
               {entry.method && <div style={{display:'inline-block'}}><GhostChip label={entry.method} active /></div>}
             </div>
-            {(entry.dose||entry.water||entry.temp||entry.brewTime||entry.grindSize||entry.ratio) && (
-              <><FormDivider /><SectionHead label="Parameters" /><div style={{height:6}}/>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-                  {[['Dose',entry.dose],['Water',entry.water],['Temp',entry.temp],['Time',entry.brewTime],['Grind',entry.grindSize],['Grinder',entry.grinder],['Ratio',entry.ratio]].filter(([,v])=>v).map(([l,v])=>(
-                    <div key={l}>
-                      <div style={{fontSize:8,color:G.label,fontFamily:'DM Mono, monospace',letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:2}}>{l}</div>
-                      <div style={{fontSize:13,color:G.text,fontFamily:'DM Mono, monospace',fontWeight:300}}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+            {(() => {
+              // Parameters shown are driven by the entry's method schema (falls
+              // back to the generic set), so method-specific fields appear here.
+              const rows = getMethodSchema(entry.method).fields
+                .map(([lbl,key]) => [lbl, entry[key]]).filter(([,v]) => v);
+              if (entry.grinder) rows.push(['Grinder', entry.grinder]);
+              if (!rows.length) return null;
+              return (
+                <><FormDivider /><SectionHead label="Parameters" /><div style={{height:6}}/>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+                    {rows.map(([l,v])=>(
+                      <div key={l}>
+                        <div style={{fontSize:8,color:G.label,fontFamily:'DM Mono, monospace',letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:2}}>{l}</div>
+                        <div style={{fontSize:13,color:G.text,fontFamily:'DM Mono, monospace',fontWeight:300}}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
             {entry.tastingNotes?.length>0 && (<><FormDivider /><SectionHead label="Tasting" /><div style={{height:6}}/><div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>{entry.tastingNotes.map(n=><GhostChip key={n} label={n} active />)}</div></>)}
             {entry.rating>0 && <div style={{marginBottom:10}}><div style={{fontSize:9,color:G.label,fontFamily:'DM Mono, monospace',marginBottom:6,letterSpacing:'0.1em',textTransform:'uppercase'}}>Rating</div><RatingSquares n={entry.rating} size={16} /></div>}
             <div style={{ display:'flex', gap:8, marginTop:6, marginBottom:10 }}>
@@ -2591,6 +2794,7 @@ function App() {
   const [customProcesses,setCustomProcesses]= useLS('custom_processes', []);
   const [gear,        setGear]        = useLS('coffee_gear',     []);
   const [pendingDeletes, setPendingDeletes] = useLS('sync_deletes', []); // "kind:id" tombstones to push
+  const [timerMode, setTimerMode] = useLS('timer_mode', 'staged'); // 'staged' | 'checklist' — device-local brew-timer preference
   const removeGear = id => { setGear(gear.filter(g => g.id!==id)); setPendingDeletes(p => [...new Set([...p, 'gear:'+id])]); };
   const community = useCommunity();
   useEffect(() => { flushShareQueue(); }, []);
@@ -2774,9 +2978,8 @@ function App() {
   const startTimer = r => { setTimerRecipe(r); setView('brew-timer'); };
   const pinDialed  = entry => setBeans(prev => prev.map(b => {
     if (b.name !== entry.beanName) return b;
-    const snap = { method:entry.method||'', grinder:entry.grinder||'', machine:entry.machine||'',
-      dose:entry.dose||'', water:entry.water||'', temp:entry.temp||'', brewTime:entry.brewTime||'',
-      grindSize:entry.grindSize||'', ratio:entry.ratio||'', recipe:entry.recipe||'' };
+    const snap = { method:entry.method||'', grinder:entry.grinder||'', machine:entry.machine||'', recipe:entry.recipe||'' };
+    getMethodSchema(entry.method).fields.forEach(([,key]) => { snap[key] = entry[key]||''; });
     return { ...b, dialed:undefined,
       dialedByMethod:{ ...(dialedMap(b)||{}), [entry.method||'Brew']: snap } };
   }));
@@ -2788,10 +2991,10 @@ function App() {
       {view==='home'         && <HomeScreen    entries={entries} {...sp} onEntryPress={e=>{ setSelEntry(e); setView('entry-detail'); }} onLogCafe={p=>{ setInit(p); setView('cafe-form'); }} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
       {view==='beans'        && <BeanLibrary   beans={beans} {...sp} onAddBean={()=>setView('add-bean')} onBeanPress={b=>{ setSelBean(b); setView('bean-detail'); }} />}
       {view==='stats'        && <StatsDash     entries={entries} {...sp} />}
-      {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} gear={gear} onGearChange={setGear} onGearRemove={removeGear} gearCatalog={gearCatalog} session={session} syncState={syncState} lastSyncAt={lastSyncAt} onSync={doSync} onExport={exportData} onImport={importData} />}
+      {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} gear={gear} onGearChange={setGear} onGearRemove={removeGear} gearCatalog={gearCatalog} session={session} syncState={syncState} lastSyncAt={lastSyncAt} onSync={doSync} onExport={exportData} onImport={importData} timerMode={timerMode} onTimerModeChange={setTimerMode} />}
       {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} beans={beans} onPinDialed={pinDialed} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
       {view==='bean-detail'  && selectedBean  && <BeanDetail  bean={selectedBean}  onBack={()=>setView('beans')} onEdit={()=>{ setInit(selectedBean); setView('bean-form-edit'); }} entries={entries} onBrewNow={startTimer} communityRecipes={community.recipes} />}
-      {view==='brew-timer'   && timerRecipe   && <TimerScreen recipe={timerRecipe} onCancel={()=>setView('home')} onLog={saveEntry} />}
+      {view==='brew-timer'   && timerRecipe   && <TimerScreen recipe={timerRecipe} onCancel={()=>setView('home')} onLog={saveEntry} mode={timerMode} />}
       {view==='cafe-form'    && <CafeForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   customNotes={customNotes} onAddNote={setCustomNotes} customDrinks={customDrinks} onAddDrink={setCustomDrinks} />}
       {view==='brew-form'    && <BrewForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   beans={beans} entries={entries} gear={gear} customNotes={customNotes} onAddNote={setCustomNotes} />}
       {view==='cafe-form-edit'&& <CafeForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} customNotes={customNotes} onAddNote={setCustomNotes} customDrinks={customDrinks} onAddDrink={setCustomDrinks} />}
