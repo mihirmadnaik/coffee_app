@@ -9,8 +9,8 @@
   <meta name="apple-mobile-web-app-title" content="Coffee Diary">
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#182635">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+  <meta name="theme-color" content="#FBFAF8">
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
@@ -19,8 +19,8 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { width: 100%; height: 100%; overflow: hidden; }
     body {
-      background: #182635;
-      font-family: 'DM Sans', sans-serif;
+      background: #FBFAF8;
+      font-family: 'Hanken Grotesk', sans-serif;
       -webkit-tap-highlight-color: transparent;
       -webkit-touch-callout: none;
     }
@@ -29,7 +29,7 @@
     .scroll-y::-webkit-scrollbar { display: none; }
     input, textarea {
       background: none; border: none; outline: none;
-      font-family: 'DM Mono', monospace; font-weight: 300;
+      font-family: 'IBM Plex Mono', monospace; font-weight: 400;
       width: 100%; -webkit-appearance: none;
     }
     textarea { resize: none; }
@@ -39,9 +39,9 @@
     }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes stageFlash {
-      0% { background: rgba(212,151,106,0); }
-      35% { background: rgba(212,151,106,0.35); }
-      100% { background: rgba(212,151,106,0); }
+      0% { background: rgba(176,124,63,0); }
+      35% { background: rgba(176,124,63,0.35); }
+      100% { background: rgba(176,124,63,0); }
     }
     .slide-up { animation: slideUp 0.28s cubic-bezier(0.32,0.72,0,1) forwards; }
     .fade-in  { animation: fadeIn  0.2s ease forwards; }
@@ -53,29 +53,38 @@
 <script type="text/babel">
 const { useState, useEffect, useCallback, useRef } = React;
 
-// ── Palette ───────────────────────────────────────────────────────────────────
+// ── Palette — "Elevation": warm paper, espresso accent ───────────────────────
+// Editable things are raised (white tiles + soft shadow); derived things are
+// flat tinted readouts. Keys kept from the old dark palette so usages map 1:1.
 const P = {
-  bg:         '#182635',
-  bgDeep:     '#0F1C29',
-  darkStroke: 'rgba(220,205,180,0.20)',
-  headerText: '#D8CAB4',
-  headerMuted:'#7A94A8',
-  cardBg:     'rgba(220,205,180,0.10)',
-  cardBg2:    'rgba(220,205,180,0.17)',
-  cardStroke: 'rgba(220,205,180,0.20)',
-  cardDark:   '#D8CAB4',
-  cardMuted:  '#7A94A8',
-  cafe:       '#D4976A',
-  brew:       '#7A9AB0',
+  bg:         '#FBFAF8',                  // paper
+  bgDeep:     '#F1EDE5',                  // deeper paper (sheets, wells)
+  darkStroke: '#ECE7DE',                  // hairline
+  headerText: '#211E1A',                  // ink
+  headerMuted:'#938C82',                  // muted
+  cardBg:     '#FFFFFF',                  // raised tile
+  cardBg2:    'rgba(92,61,40,0.07)',      // accent tint band (derived/highlight)
+  cardStroke: '#EFE9DE',                  // tile stroke
+  cardDark:   '#211E1A',
+  cardMuted:  '#938C82',
+  cafe:       '#A9622F',                  // cafe entries: burnt sienna
+  brew:       '#5C3D28',                  // home brews: espresso (= accent)
+  acc:        '#5C3D28',                  // primary accent
+  tint:       'rgba(92,61,40,0.07)',
+  tintStroke: 'rgba(92,61,40,0.16)',
+  line:       '#ECE7DE',
+  shadow:     '0 5px 12px -5px rgba(40,30,20,0.22)',   // raised tile
+  shadowSm:   '0 3px 8px -2px rgba(40,30,20,0.26)',    // round stepper btn
+  shadowBtn:  '0 10px 22px -10px rgba(40,30,20,0.45)', // primary button
 };
 
 const G = {
-  surface:    '#2a3d50',
-  border:     'rgba(240,228,204,0.12)',
-  label:      '#5a7a8a',
-  text:       '#d8c8a8',
-  placeholder:'#5a7a8a',
-  chipBorder: 'rgba(240,228,204,0.25)',
+  surface:    '#FFFFFF',
+  border:     '#EFE9DE',
+  label:      '#938C82',
+  text:       '#211E1A',
+  placeholder:'#C6BFB4',
+  chipBorder: '#E3DCCF',
 };
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
@@ -289,10 +298,10 @@ function loadLeaflet() {
     document.head.appendChild(css);
     const style = document.createElement('style');
     style.textContent = [
-      '.leaflet-container{background:#0F1C29}',
-      '.leaflet-tile-pane{filter:hue-rotate(185deg) saturate(0.55) brightness(0.82)}',
-      '.leaflet-control-attribution{background:rgba(15,28,41,0.85)!important;color:#7A94A8!important;font-size:7px!important;padding:2px 6px!important;border-radius:4px 0 0 0!important}',
-      '.leaflet-control-attribution a{color:#D4976A!important}',
+      '.leaflet-container{background:#EAE7E0}',
+      '.leaflet-tile-pane{filter:saturate(0.82) sepia(0.10) brightness(1.01)}',
+      '.leaflet-control-attribution{background:rgba(251,250,248,0.9)!important;color:#938C82!important;font-size:7px!important;padding:2px 6px!important;border-radius:4px 0 0 0!important}',
+      '.leaflet-control-attribution a{color:#5C3D28!important}',
     ].join('');
     document.head.appendChild(style);
     const js = document.createElement('script');
@@ -542,11 +551,11 @@ function RatingDots({ n=0, max=5 }) {
 function GhostChip({ label, active, onPress }) {
   return (
     <div onClick={onPress} style={{ padding:'5px 13px', borderRadius:20, fontSize:10,
-      cursor:'pointer', fontFamily:'DM Mono, monospace', fontWeight:300,
+      cursor:'pointer', fontFamily:'IBM Plex Mono, monospace', fontWeight:400,
       letterSpacing:'0.02em', whiteSpace:'nowrap',
-      background: active ? P.cafe : 'transparent',
-      color: active ? '#f0e4cc' : G.text,
-      border:'1px solid '+(active ? P.cafe : G.chipBorder),
+      background: active ? P.tint : 'transparent',
+      color: active ? P.acc : P.headerMuted,
+      border:'1px solid '+(active ? P.acc : G.chipBorder),
       transition:'all 0.15s' }}>
       {label}
     </div>
@@ -570,7 +579,7 @@ function ChipAdder({ label, presets, custom=[], onCustomChange, selected=[], onT
   };
   return (
     <div style={{ marginBottom:14 }}>
-      <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>{label}</div>
+      <div style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>{label}</div>
       <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
         {all.map(n=><GhostChip key={n} label={n} active={selected.includes(n)} onPress={()=>onToggle(n)} />)}
         {adding
@@ -578,9 +587,9 @@ function ChipAdder({ label, presets, custom=[], onCustomChange, selected=[], onT
               <input autoFocus value={inp} onChange={e=>setInp(e.target.value)}
                 onKeyDown={e=>{ if(e.key==='Enter') commit(); if(e.key==='Escape'){setInp('');setAdding(false);} }}
                 style={{ fontSize:10, color:G.text, background:G.surface, border:'1px solid '+P.cafe,
-                  borderRadius:20, padding:'4px 10px', width:90, fontFamily:'DM Mono, monospace', fontWeight:300 }} />
-              <span onClick={commit} style={{ fontSize:11, color:P.cafe, cursor:'pointer', fontFamily:'DM Mono, monospace' }}>✓</span>
-              <span onClick={()=>{setInp('');setAdding(false);}} style={{ fontSize:11, color:G.label, cursor:'pointer', fontFamily:'DM Mono, monospace' }}>✕</span>
+                  borderRadius:20, padding:'4px 10px', width:90, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }} />
+              <span onClick={commit} style={{ fontSize:11, color:P.cafe, cursor:'pointer', fontFamily:'IBM Plex Mono, monospace' }}>✓</span>
+              <span onClick={()=>{setInp('');setAdding(false);}} style={{ fontSize:11, color:G.label, cursor:'pointer', fontFamily:'IBM Plex Mono, monospace' }}>✕</span>
             </div>
           : <GhostChip label="+ add" onPress={()=>setAdding(true)} />
         }
@@ -592,7 +601,7 @@ function ChipAdder({ label, presets, custom=[], onCustomChange, selected=[], onT
 function GhostField({ label, placeholder, value, onChange, multiline, height=42 }) {
   return (
     <div style={{ marginBottom:12 }}>
-      {label && <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace',
+      {label && <div style={{ fontSize:8.5, color:G.label, fontFamily:'IBM Plex Mono, monospace',
         marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' }}>{label}</div>}
       <div style={{ height:multiline?undefined:height, minHeight:multiline?60:undefined,
         background:G.surface, border:'1px solid '+G.border, borderRadius:10,
@@ -613,25 +622,32 @@ function GhostField({ label, placeholder, value, onChange, multiline, height=42 
 
 function SectionHead({ label }) {
   return (
-    <div style={{ fontFamily:'Cormorant Garamond, serif', fontSize:15, fontWeight:500,
-      color:'#8a9aaa', letterSpacing:'0.04em', marginBottom:6, marginTop:4 }}>{label}</div>
+    <div style={{ fontSize:10, fontWeight:600, textTransform:'uppercase',
+      color:P.headerMuted, letterSpacing:'0.14em', marginBottom:6, marginTop:4 }}>{label}</div>
+  );
+}
+
+// Tiny uppercase field label — the reference's `.fl`
+function FieldLabel({ children, style={} }) {
+  return (
+    <div style={{ fontSize:8.5, letterSpacing:'0.14em', textTransform:'uppercase',
+      color:P.headerMuted, fontWeight:600, ...style }}>{children}</div>
   );
 }
 
 function FormDivider() {
-  return <div style={{ height:'0.5px', background:'rgba(208,228,244,0.12)', margin:'6px 0 10px' }} />;
+  return <div style={{ height:'0.5px', background:'#ECE7DE', margin:'6px 0 10px' }} />;
 }
 
 function NavBar({ title, onBack, onSave }) {
   return (
-    <div style={{ padding:'8px 16px', display:'flex', justifyContent:'space-between',
-      alignItems:'center', borderBottom:'0.5px solid rgba(240,228,204,0.15)',
+    <div style={{ padding:'8px 20px 12px', display:'flex', justifyContent:'space-between',
+      alignItems:'center', borderBottom:'1px solid '+P.line,
       background:P.bg, flexShrink:0,
-      paddingTop:'calc(8px + env(safe-area-inset-top))' }}>
-      <div onClick={onBack} style={{ fontSize:11, color:P.cafe, cursor:'pointer', padding:'4px 0' }}>← Back</div>
-      <div style={{ fontSize:13, fontWeight:500, color:G.text,
-        fontFamily:'Cormorant Garamond, serif', letterSpacing:'0.04em' }}>{title}</div>
-      <div onClick={onSave} style={{ fontSize:11, color:P.cafe, fontWeight:600, cursor:'pointer', padding:'4px 0' }}>Save</div>
+      paddingTop:'calc(10px + env(safe-area-inset-top))' }}>
+      <div onClick={onBack} style={{ fontSize:13, color:P.headerMuted, cursor:'pointer', padding:'4px 0' }}>← Back</div>
+      <div style={{ fontSize:15, fontWeight:600, color:P.headerText }}>{title}</div>
+      <div onClick={onSave} style={{ fontSize:13, color:P.acc, fontWeight:600, cursor:'pointer', padding:'4px 0' }}>Save</div>
     </div>
   );
 }
@@ -639,17 +655,17 @@ function NavBar({ title, onBack, onSave }) {
 function TabBar({ active, onTab, onAdd }) {
   const tabs = [{label:'HOME',i:0},{label:'BEANS',i:1},null,{label:'STATS',i:3},{label:'PROFILE',i:4}];
   return (
-    <div style={{ height:58, background:P.bg, borderTop:'0.5px solid '+P.darkStroke,
+    <div style={{ height:58, background:P.bg, borderTop:'1px solid '+P.line,
       display:'flex', alignItems:'center', flexShrink:0, padding:'0 8px',
       paddingBottom:'env(safe-area-inset-bottom)' }}>
       {tabs.map((tab,i) => {
         if (!tab) return (
           <div key={i} style={{ flex:1, display:'flex', justifyContent:'center' }}>
-            <div onClick={onAdd} style={{ width:46, height:46, borderRadius:'50%', background:P.cafe,
-              boxShadow:'0 4px 14px rgba(212,151,106,0.35)',
+            <div onClick={onAdd} style={{ width:46, height:46, borderRadius:'50%', background:P.acc,
+              boxShadow:P.shadowBtn,
               display:'flex', alignItems:'center', justifyContent:'center',
               marginBottom:14, cursor:'pointer' }}>
-              <div style={{ fontSize:24, color:'#182635', lineHeight:1, fontWeight:300, marginTop:-2 }}>+</div>
+              <div style={{ fontSize:24, color:'#fff', lineHeight:1, fontWeight:300, marginTop:-2 }}>+</div>
             </div>
           </div>
         );
@@ -659,10 +675,10 @@ function TabBar({ active, onTab, onAdd }) {
             flexDirection:'column', alignItems:'center', justifyContent:'center',
             gap:4, paddingTop:4, cursor:'pointer' }}>
             <div style={{ width:6, height:6, borderRadius:'50%',
-              background: on ? P.cafe : P.headerMuted, opacity: on?1:0.4 }} />
-            <span style={{ fontSize:8, color: on?P.cafe:P.headerMuted,
-              fontFamily:'DM Mono, monospace', letterSpacing:'0.06em',
-              textTransform:'uppercase', fontWeight: on?400:300 }}>{tab.label}</span>
+              background: on ? P.acc : P.headerMuted, opacity: on?1:0.35 }} />
+            <span style={{ fontSize:8, color: on?P.acc:P.headerMuted,
+              fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em',
+              textTransform:'uppercase', fontWeight: on?500:400 }}>{tab.label}</span>
           </div>
         );
       })}
@@ -691,7 +707,7 @@ function MiniCalendar({ entries, onClose, onDaySelect, selectedDay }) {
     <div style={{ background:P.cardBg2, border:'0.5px solid '+P.cardStroke,
       borderRadius:14, padding:'10px 12px', marginBottom:8 }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-        <span style={{ fontSize:11, fontWeight:600, color:P.cardDark, fontFamily:'Cormorant Garamond, serif' }}>{monthLabel}</span>
+        <span style={{ fontSize:11, fontWeight:600, color:P.cardDark, fontFamily:'Hanken Grotesk, sans-serif' }}>{monthLabel}</span>
         <span onClick={onClose} style={{ fontSize:9, color:P.cafe, cursor:'pointer', fontWeight:600 }}>Done</span>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:1, marginBottom:3 }}>
@@ -795,7 +811,7 @@ function MapView({ entries, onLogCafe }) {
     loadLeaflet().then(() => {
       if (!live || !containerRef.current || mapRef.current) return;
       const map = L.map(containerRef.current, { zoomControl:false });
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
         attribution:'© <a href="https://openstreetmap.org">OSM</a> © <a href="https://carto.com">CARTO</a>',
         maxZoom:19
       }).addTo(map);
@@ -857,22 +873,22 @@ function MapView({ entries, onLogCafe }) {
     <div style={{ flex:1, position:'relative', overflow:'hidden' }}>
       {/* Nearby / Visited toggle */}
       <div style={{ position:'absolute', top:10, left:'50%', transform:'translateX(-50%)',
-        zIndex:1000, display:'flex', background:'rgba(24,38,53,0.92)',
+        zIndex:1000, display:'flex', background:'rgba(251,250,248,0.92)',
         border:'0.5px solid '+P.cardStroke, borderRadius:20, padding:3, gap:2 }}>
         {[['nearby','Nearby'],['visited','Visited']].map(([v,l])=>(
           <div key={v} onClick={()=>setLayer(v)}
             style={{ padding:'4px 16px', borderRadius:16, fontSize:9, cursor:'pointer',
-              fontFamily:'DM Mono, monospace', transition:'all 0.15s',
+              fontFamily:'IBM Plex Mono, monospace', transition:'all 0.15s',
               background: layer===v ? P.cafe : 'transparent',
-              color: layer===v ? '#f0e4cc' : P.headerMuted }}>{l}</div>
+              color: layer===v ? '#fff' : P.headerMuted }}>{l}</div>
         ))}
       </div>
 
       {/* Loading pill */}
       {loading && (
         <div style={{ position:'absolute', top:46, left:'50%', transform:'translateX(-50%)',
-          zIndex:1000, background:'rgba(24,38,53,0.85)', padding:'3px 10px',
-          borderRadius:10, fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>
+          zIndex:1000, background:'rgba(251,250,248,0.88)', padding:'3px 10px',
+          borderRadius:10, fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace' }}>
           loading…
         </div>
       )}
@@ -883,7 +899,7 @@ function MapView({ entries, onLogCafe }) {
           alignItems:'center', justifyContent:'center', background:P.bg }}>
           <div style={{ textAlign:'center', padding:'0 40px' }}>
             <div style={{ fontSize:32, marginBottom:12 }}>📍</div>
-            <div style={{ fontSize:11, color:P.headerMuted, fontFamily:'DM Mono, monospace', lineHeight:1.6 }}>
+            <div style={{ fontSize:11, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', lineHeight:1.6 }}>
               Location access needed<br/>to find nearby cafés.
             </div>
           </div>
@@ -896,9 +912,9 @@ function MapView({ entries, onLogCafe }) {
       {/* Visited empty state */}
       {layer==='visited' && cafesWithCoords.length===0 && !geoErr && (
         <div style={{ position:'absolute', bottom:16, left:16, right:16, zIndex:500,
-          background:'rgba(24,38,53,0.92)', border:'0.5px solid '+P.cardStroke,
+          background:'rgba(251,250,248,0.92)', border:'0.5px solid '+P.cardStroke,
           borderRadius:14, padding:'14px 16px', textAlign:'center' }}>
-          <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace',
+          <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace',
             fontWeight:300, lineHeight:1.7 }}>
             Cafés logged via location search<br/>will appear here.
           </div>
@@ -908,15 +924,15 @@ function MapView({ entries, onLogCafe }) {
       {/* Selected marker card */}
       {sel && (
         <div style={{ position:'absolute', bottom:0, left:0, right:0, zIndex:1000,
-          background:'rgba(24,38,53,0.97)', borderTop:'0.5px solid '+P.cardStroke,
+          background:'rgba(251,250,248,0.98)', borderTop:'0.5px solid '+P.cardStroke,
           borderRadius:'16px 16px 0 0', padding:'16px 16px 28px' }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
             <div style={{ flex:1, paddingRight:10 }}>
               <div style={{ fontSize:18, fontWeight:500, color:P.headerText,
-                fontFamily:'Cormorant Garamond, serif', lineHeight:1.2 }}>{sel.name}</div>
-              {sel.sub && <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace',
+                fontFamily:'Hanken Grotesk, sans-serif', lineHeight:1.2 }}>{sel.name}</div>
+              {sel.sub && <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace',
                 fontWeight:300, marginTop:3 }}>{sel.sub}</div>}
-              {distStr && <div style={{ fontSize:9, color:P.cafe, fontFamily:'DM Mono, monospace',
+              {distStr && <div style={{ fontSize:9, color:P.cafe, fontFamily:'IBM Plex Mono, monospace',
                 marginTop:4 }}>{distStr}</div>}
             </div>
             <span onClick={()=>setSel(null)} style={{ fontSize:22, color:P.headerMuted,
@@ -926,13 +942,13 @@ function MapView({ entries, onLogCafe }) {
             <div onClick={()=>{ onLogCafe&&onLogCafe({ cafeName:sel.name, location:sel.sub, lat:sel.lat, lon:sel.lon }); setSel(null); }}
               style={{ background:P.cafe, borderRadius:10, padding:'11px',
                 textAlign:'center', cursor:'pointer',
-                boxShadow:'0 3px 10px rgba(212,151,106,0.3)' }}>
-              <span style={{ fontSize:11, color:'#182635', fontFamily:'DM Mono, monospace',
+                boxShadow:'0 3px 10px rgba(40,30,20,0.30)' }}>
+              <span style={{ fontSize:11, color:'#fff', fontFamily:'IBM Plex Mono, monospace',
                 letterSpacing:'0.04em' }}>log a visit →</span>
             </div>
           )}
           {sel.kind==='visited' && sel.entry && (
-            <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>
+            <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace' }}>
               visited · {new Date(sel.entry.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
             </div>
           )}
@@ -959,11 +975,11 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgai
         display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
         <div>
           <div style={{ fontSize:28, fontWeight:500, fontStyle:'italic',
-            color:P.headerText, fontFamily:'Cormorant Garamond, serif', lineHeight:1 }}>
+            color:P.headerText, fontFamily:'Hanken Grotesk, sans-serif', lineHeight:1 }}>
             {getMonthName()}
           </div>
           <div style={{ fontSize:8.5, color:P.headerMuted, marginTop:3,
-            fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+            fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>
             {getMonthCount(entries)} coffee{getMonthCount(entries)!==1?'s':''} this month
           </div>
         </div>
@@ -973,7 +989,7 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgai
             {['Feed','Map'].map(m=>(
               <div key={m} onClick={()=>{ setMapMode(m==='Map'); setCalOpen(false); }}
                 style={{ padding:'4px 12px', borderRadius:16, cursor:'pointer',
-                  fontFamily:'DM Mono, monospace', fontSize:9, fontWeight:400,
+                  fontFamily:'IBM Plex Mono, monospace', fontSize:9, fontWeight:400,
                   background: (m==='Map')===mapMode ? P.cafe : 'transparent',
                   color: (m==='Map')===mapMode ? P.bg : P.headerMuted,
                   transition:'all 0.15s' }}>
@@ -1013,31 +1029,31 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgai
 
           {filterDay && !calOpen && (
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'4px 0 10px' }}>
-              <span style={{ fontSize:10, color:P.cafe, fontFamily:'DM Mono, monospace', fontWeight:400 }}>
+              <span style={{ fontSize:10, color:P.cafe, fontFamily:'IBM Plex Mono, monospace', fontWeight:400 }}>
                 {new Date(filterDay+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}
               </span>
-              <span onClick={()=>setFilterDay(null)} style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', cursor:'pointer' }}>clear ×</span>
+              <span onClick={()=>setFilterDay(null)} style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', cursor:'pointer' }}>clear ×</span>
             </div>
           )}
 
           {!calOpen && !filterDay && showBrewAgain && (
-            <div style={{ background:'rgba(122,154,176,0.12)', border:'0.5px solid rgba(122,154,176,0.4)',
+            <div style={{ background:P.tint, border:'0.5px solid '+P.tintStroke,
               borderRadius:12, padding:'12px 14px', margin:'10px 0 4px' }}>
-              <div style={{ fontSize:8, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', marginBottom:5 }}>LAST BREW</div>
-              <div style={{ fontSize:16, fontWeight:500, color:P.headerText, fontFamily:'Cormorant Garamond, serif' }}>
+              <div style={{ fontSize:8, color:P.brew, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.1em', marginBottom:5 }}>LAST BREW</div>
+              <div style={{ fontSize:16, fontWeight:500, color:P.headerText, fontFamily:'Hanken Grotesk, sans-serif' }}>
                 {lastBrew.beanName||'Unnamed Brew'}
               </div>
-              <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:2 }}>
+              <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:2 }}>
                 {[lastBrew.method, lastBrew.grindSize && `grind ${lastBrew.grindSize}`, lastBrew.ratio, lastBrew.brewTime].filter(Boolean).join(' · ')}
               </div>
               <div style={{ display:'flex', gap:8, marginTop:10 }}>
                 <div onClick={()=>onStartTimer && onStartTimer(lastBrew)}
                   style={{ flex:1, background:P.brew, borderRadius:9, padding:'9px', textAlign:'center', cursor:'pointer' }}>
-                  <span style={{ fontSize:10, color:'#182635', fontFamily:'DM Mono, monospace' }}>▶ brew with timer</span>
+                  <span style={{ fontSize:10, color:'#fff', fontFamily:'IBM Plex Mono, monospace' }}>▶ brew with timer</span>
                 </div>
                 <div onClick={()=>onBrewAgain && onBrewAgain(lastBrew)}
                   style={{ flex:1, border:'1px solid '+P.brew, borderRadius:9, padding:'9px', textAlign:'center', cursor:'pointer' }}>
-                  <span style={{ fontSize:10, color:P.brew, fontFamily:'DM Mono, monospace' }}>log it again ☕</span>
+                  <span style={{ fontSize:10, color:P.brew, fontFamily:'IBM Plex Mono, monospace' }}>log it again ☕</span>
                 </div>
               </div>
             </div>
@@ -1045,7 +1061,7 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgai
 
           {!calOpen && groups.length===0 && (
             <div style={{ textAlign:'center', padding:'60px 20px',
-              color:P.headerMuted, fontFamily:'DM Mono, monospace', fontSize:12, fontWeight:300 }}>
+              color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontSize:12, fontWeight:300 }}>
               <div style={{ fontSize:36, marginBottom:14 }}>☕</div>
               <div>No entries yet.</div>
               <div style={{ marginTop:6, fontSize:10 }}>Tap + to log your first coffee.</div>
@@ -1055,7 +1071,7 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgai
           {!calOpen && groups.map((g,gi)=>(
             <div key={gi}>
               <div style={{ display:'flex', alignItems:'center', gap:7, padding:'10px 0 6px' }}>
-                <span style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace',
+                <span style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace',
                   letterSpacing:'0.1em', flexShrink:0 }}>{g.label.toUpperCase()}</span>
                 <div style={{ flex:1, height:'0.5px', background:P.darkStroke }} />
               </div>
@@ -1069,16 +1085,16 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgai
                   <div style={{ flex:1, padding:'10px 12px', display:'flex', alignItems:'center', gap:8 }}>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:14, fontWeight:500, color:P.headerText,
-                        fontFamily:'Cormorant Garamond, serif', letterSpacing:'0.01em' }}>
+                        fontFamily:'Hanken Grotesk, sans-serif', letterSpacing:'0.01em' }}>
                         {e.type==='cafe' ? (e.cafeName||'Unnamed Café') : (e.beanName||'Unnamed Brew')}
                       </div>
                       <div style={{ fontSize:8.5, color:P.headerMuted,
-                        fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:2 }}>
+                        fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:2 }}>
                         {formatTime(e.date)}
                       </div>
                     </div>
                     <div style={{ flexShrink:0, textAlign:'right' }}>
-                      <span style={{ fontSize:9, fontFamily:'DM Mono, monospace',
+                      <span style={{ fontSize:9, fontFamily:'IBM Plex Mono, monospace',
                         color: e.type==='cafe' ? P.cafe : P.brew }}>
                         {e.type==='cafe' ? (e.drinkType||'Café') : (e.method||'Brew')}
                       </span>
@@ -1168,21 +1184,21 @@ function TimerScreen({ recipe, onCancel, onLog, mode='staged' }) {
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
       <div style={{ padding:'8px 16px', paddingTop:'calc(8px + env(safe-area-inset-top))',
         display:'flex', justifyContent:'space-between', alignItems:'center',
-        borderBottom:'0.5px solid rgba(240,228,204,0.15)', flexShrink:0 }}>
+        borderBottom:'0.5px solid #ECE7DE', flexShrink:0 }}>
         <div onClick={onCancel} style={{ fontSize:11, color:P.cafe, cursor:'pointer', padding:'4px 0' }}>✕ Cancel</div>
-        <div style={{ fontSize:13, fontWeight:500, color:G.text, fontFamily:'Cormorant Garamond, serif', letterSpacing:'0.04em' }}>Brew Timer</div>
+        <div style={{ fontSize:13, fontWeight:500, color:G.text, fontFamily:'Hanken Grotesk, sans-serif', letterSpacing:'0.04em' }}>Brew Timer</div>
         <div style={{ width:44 }} />
       </div>
 
       <div className="scroll-y" style={{ flex:1, padding:'20px 16px', display:'flex', flexDirection:'column' }}>
         <div style={{ textAlign:'center', marginBottom:6 }}>
-          <div style={{ fontSize:22, fontWeight:500, color:P.headerText, fontFamily:'Cormorant Garamond, serif' }}>{recipe.beanName||'Brew'}</div>
-          {recipe.method && <div style={{ fontSize:9, color:P.brew, fontFamily:'DM Mono, monospace', marginTop:3 }}>{recipe.method}</div>}
+          <div style={{ fontSize:22, fontWeight:500, color:P.headerText, fontFamily:'Hanken Grotesk, sans-serif' }}>{recipe.beanName||'Brew'}</div>
+          {recipe.method && <div style={{ fontSize:9, color:P.brew, fontFamily:'IBM Plex Mono, monospace', marginTop:3 }}>{recipe.method}</div>}
         </div>
         {params.length>0 && (
           <div style={{ display:'flex', justifyContent:'center', flexWrap:'wrap', gap:'2px 12px', marginBottom:18 }}>
             {params.map(([l,v])=>(
-              <span key={l} style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>{l} <span style={{ color:G.text }}>{v}</span></span>
+              <span key={l} style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace' }}>{l} <span style={{ color:G.text }}>{v}</span></span>
             ))}
           </div>
         )}
@@ -1191,26 +1207,26 @@ function TimerScreen({ recipe, onCancel, onLog, mode='staged' }) {
           <>
             {curStage && (
               <div className={flashOn ? 'stage-flash' : ''} style={{ textAlign:'center', marginBottom:16, borderRadius:14, padding:'10px 0' }}>
-                <div style={{ fontSize:9, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.12em', marginBottom:8 }}>
+                <div style={{ fontSize:9, color:P.brew, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.12em', marginBottom:8 }}>
                   STAGE {stageIdx+1}/{stages.length} · {curStage.label.toUpperCase()}
                 </div>
-                <div style={{ fontSize:60, fontWeight:300, color:P.headerText, fontFamily:'DM Mono, monospace', lineHeight:1 }}>
+                <div style={{ fontSize:60, fontWeight:300, color:P.headerText, fontFamily:'IBM Plex Mono, monospace', lineHeight:1 }}>
                   {curStage.kind==='timed' ? fmtSec(stageRemain) : fmtSec(stageElapsed)}
                 </div>
-                <div style={{ fontSize:11, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:10, padding:'0 20px' }}>{curStage.cue}</div>
-                {curStage.kind==='manual' && <div style={{ fontSize:8.5, color:P.cafe, fontFamily:'DM Mono, monospace', marginTop:6, letterSpacing:'0.1em' }}>▸ tap “done” when finished</div>}
-                <div style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginTop:8 }}>total {fmtSec(elapsed)}</div>
+                <div style={{ fontSize:11, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:10, padding:'0 20px' }}>{curStage.cue}</div>
+                {curStage.kind==='manual' && <div style={{ fontSize:8.5, color:P.cafe, fontFamily:'IBM Plex Mono, monospace', marginTop:6, letterSpacing:'0.1em' }}>▸ tap “done” when finished</div>}
+                <div style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', marginTop:8 }}>total {fmtSec(elapsed)}</div>
               </div>
             )}
             <div style={{ marginBottom:20 }}>
               {stages.map((s,i)=>(
                 <div key={s.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 10px',
                   borderRadius:8, marginBottom:3,
-                  background: i===stageIdx ? 'rgba(122,154,176,0.14)' : 'transparent' }}>
-                  <span style={{ fontSize:9, color: i<=stageIdx ? P.brew : P.headerMuted, fontFamily:'DM Mono, monospace', width:44, flexShrink:0 }}>
+                  background: i===stageIdx ? 'rgba(92,61,40,0.09)' : 'transparent' }}>
+                  <span style={{ fontSize:9, color: i<=stageIdx ? P.brew : P.headerMuted, fontFamily:'IBM Plex Mono, monospace', width:44, flexShrink:0 }}>
                     {s.kind==='timed' ? fmtSec(s.seconds) : '·····'}
                   </span>
-                  <span style={{ fontSize:11, fontFamily:'DM Mono, monospace', fontWeight:300,
+                  <span style={{ fontSize:11, fontFamily:'IBM Plex Mono, monospace', fontWeight:300,
                     color: i===stageIdx ? G.text : P.headerMuted, opacity: i>stageIdx ? 0.6 : 1 }}>
                     {i<stageIdx?'✓ ':''}{s.label}
                   </span>
@@ -1221,17 +1237,17 @@ function TimerScreen({ recipe, onCancel, onLog, mode='staged' }) {
         ) : !finished ? (
           <>
             <div style={{ textAlign:'center', marginBottom:18 }}>
-              <div style={{ fontSize:60, fontWeight:300, color: over ? P.cafe : P.headerText, fontFamily:'DM Mono, monospace', lineHeight:1 }}>{fmtSec(elapsed)}</div>
-              {target>0 && <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginTop:6 }}>target {fmtSec(target)}</div>}
+              <div style={{ fontSize:60, fontWeight:300, color: over ? P.cafe : P.headerText, fontFamily:'IBM Plex Mono, monospace', lineHeight:1 }}>{fmtSec(elapsed)}</div>
+              {target>0 && <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', marginTop:6 }}>target {fmtSec(target)}</div>}
             </div>
             <div style={{ marginBottom:20 }}>
               {checklist.map((s,i)=>(
                 <div key={s.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 10px',
                   borderRadius:8, marginBottom:3,
-                  background: i===curIdx && elapsed>0 ? 'rgba(122,154,176,0.14)' : 'transparent' }}>
+                  background: i===curIdx && elapsed>0 ? 'rgba(92,61,40,0.09)' : 'transparent' }}>
                   <span style={{ fontSize:9, color: i<=curIdx && elapsed>0 ? P.brew : P.headerMuted,
-                    fontFamily:'DM Mono, monospace', width:34, flexShrink:0 }}>{fmtSec(s.at)}</span>
-                  <span style={{ fontSize:11, fontFamily:'DM Mono, monospace', fontWeight:300,
+                    fontFamily:'IBM Plex Mono, monospace', width:34, flexShrink:0 }}>{fmtSec(s.at)}</span>
+                  <span style={{ fontSize:11, fontFamily:'IBM Plex Mono, monospace', fontWeight:300,
                     color: i===curIdx && elapsed>0 ? G.text : P.headerMuted,
                     opacity: i>curIdx ? 0.6 : 1 }}>{i<curIdx?'✓ ':''}{s.cue||s.label}</span>
                 </div>
@@ -1246,33 +1262,33 @@ function TimerScreen({ recipe, onCancel, onLog, mode='staged' }) {
               <div onClick={()=>setRunning(r=>!r)}
                 style={{ flex:1, background: running ? 'transparent' : P.brew,
                   border:'1px solid '+P.brew, borderRadius:12, padding:'14px', textAlign:'center', cursor:'pointer' }}>
-                <span style={{ fontSize:12, fontFamily:'DM Mono, monospace', color: running ? P.brew : '#182635' }}>
+                <span style={{ fontSize:12, fontFamily:'IBM Plex Mono, monospace', color: running ? P.brew : '#fff' }}>
                   {running ? 'pause' : elapsed>0 ? 'resume' : '▶ start'}
                 </span>
               </div>
               {staged && elapsed>0 && curStage && curStage.kind==='manual' ? (
                 <div onClick={()=>{ beep(); flash(); advance(); }}
                   style={{ flex:1, background:P.brew, borderRadius:12, padding:'14px', textAlign:'center', cursor:'pointer' }}>
-                  <span style={{ fontSize:12, fontFamily:'DM Mono, monospace', color:'#182635' }}>
+                  <span style={{ fontSize:12, fontFamily:'IBM Plex Mono, monospace', color:'#fff' }}>
                     {stageIdx>=stages.length-1 ? 'done ✓' : 'done →'}
                   </span>
                 </div>
               ) : elapsed>0 && (
                 <div onClick={()=>{ setRunning(false); setFinished(true); }}
                   style={{ flex:1, background:P.cafe, borderRadius:12, padding:'14px', textAlign:'center', cursor:'pointer' }}>
-                  <span style={{ fontSize:12, fontFamily:'DM Mono, monospace', color:'#182635' }}>finish ✓</span>
+                  <span style={{ fontSize:12, fontFamily:'IBM Plex Mono, monospace', color:'#fff' }}>finish ✓</span>
                 </div>
               )}
             </div>
           ) : (
             <div>
               <div style={{ textAlign:'center', marginBottom:10 }}>
-                <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginBottom:8 }}>brewed in {fmtSec(elapsed)} — how was it?</div>
+                <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', marginBottom:8 }}>brewed in {fmtSec(elapsed)} — how was it?</div>
                 <div style={{ display:'flex', justifyContent:'center' }}><RatingSquares n={rating} size={22} onChange={setRating} /></div>
               </div>
               <div onClick={handleLog} style={{ background:P.cafe, borderRadius:12, padding:'14px',
-                textAlign:'center', cursor:'pointer', boxShadow:'0 3px 10px rgba(212,151,106,0.3)' }}>
-                <span style={{ fontSize:12, fontFamily:'DM Mono, monospace', color:'#182635' }}>log this brew</span>
+                textAlign:'center', cursor:'pointer', boxShadow:'0 3px 10px rgba(40,30,20,0.30)' }}>
+                <span style={{ fontSize:12, fontFamily:'IBM Plex Mono, monospace', color:'#fff' }}>log this brew</span>
               </div>
             </div>
           )}
@@ -1297,23 +1313,23 @@ function DialInPanel({ last, attempt, grinder }) {
     last.brewTime && `time ${last.brewTime}`,
     last.ratio && `ratio ${last.ratio}`, last.temp].filter(Boolean).join(' · ');
   return (
-    <div style={{ background:'rgba(122,154,176,0.10)', border:'0.5px solid rgba(122,154,176,0.35)',
+    <div style={{ background:'rgba(92,61,40,0.07)', border:'0.5px solid rgba(92,61,40,0.30)',
       borderRadius:12, padding:'11px 13px', marginBottom:14 }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-        <span style={{ fontSize:8, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em' }}>DIAL-IN · ATTEMPT #{attempt}</span>
+        <span style={{ fontSize:8, color:P.brew, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.1em' }}>DIAL-IN · ATTEMPT #{attempt}</span>
         {last.rating>0 && <RatingDots n={last.rating} />}
       </div>
-      <div style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, marginBottom:8 }}>
+      <div style={{ fontSize:10, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginBottom:8 }}>
         last time: {lastLine || 'no parameters logged'}
       </div>
-      <div style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginBottom:6 }}>How did the last one taste?</div>
+      <div style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', marginBottom:6 }}>How did the last one taste?</div>
       <div style={{ display:'flex', gap:5 }}>
         {[['sour','Sour / weak'],['right','Just right'],['bitter','Bitter / harsh']].map(([k,l])=>(
           <GhostChip key={k} label={l} active={taste===k} onPress={()=>setTaste(taste===k?null:k)} />
         ))}
       </div>
       {taste && (
-        <div style={{ fontSize:9.5, color:P.brew, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6, marginTop:8 }}>
+        <div style={{ fontSize:9.5, color:P.brew, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, lineHeight:1.6, marginTop:8 }}>
           {tips[taste]}
         </div>
       )}
@@ -1430,24 +1446,24 @@ function QuickCaptureSheet({ onClose, onSave, onExpand, beans=[], gear=[] }) {
 
   const fieldStyle = { height:42, background:G.surface, border:'1px solid '+G.border,
     borderRadius:10, display:'flex', alignItems:'center', padding:'0 14px' };
-  const labelStyle = { fontSize:8.5, color:P.cardMuted, fontFamily:'DM Mono, monospace',
+  const labelStyle = { fontSize:8.5, color:P.cardMuted, fontFamily:'IBM Plex Mono, monospace',
     marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' };
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:100, display:'flex', flexDirection:'column', justifyContent:'flex-end' }}>
       <div className="fade-in" onClick={onClose}
-        style={{ position:'absolute', inset:0, background:'rgba(10,18,26,0.7)' }} />
+        style={{ position:'absolute', inset:0, background:'rgba(40,30,20,0.35)' }} />
       <div className="slide-up" style={{ position:'relative', zIndex:1,
-        background:'rgba(24,38,53,0.97)', borderRadius:'20px 20px 0 0',
+        background:'rgba(251,250,248,0.98)', borderRadius:'20px 20px 0 0',
         border:'0.5px solid '+P.cardStroke, borderBottom:'none',
         padding:'0 16px', paddingBottom:'env(safe-area-inset-bottom)' }}>
         <div style={{ width:36, height:3, background:P.cardStroke, borderRadius:3, margin:'10px auto 14px' }} />
         <div style={{ display:'flex', gap:8, marginBottom:16 }}>
           {[['cafe','Café Visit'],['brew','Home Brew']].map(([val,lbl])=>(
             <div key={val} onClick={()=>setType(val)} style={{ padding:'6px 16px', borderRadius:20,
-              fontSize:11, cursor:'pointer', fontFamily:'DM Mono, monospace', fontWeight:300,
+              fontSize:11, cursor:'pointer', fontFamily:'IBM Plex Mono, monospace', fontWeight:300,
               background: type===val ? P.cafe : 'transparent',
-              color: type===val ? '#f0e4cc' : P.cardMuted,
+              color: type===val ? '#fff' : P.cardMuted,
               border:'1px solid '+(type===val ? P.cafe : P.cardStroke), transition:'all 0.15s' }}>
               {lbl}
             </div>
@@ -1482,12 +1498,12 @@ function QuickCaptureSheet({ onClose, onSave, onExpand, beans=[], gear=[] }) {
         </div>
         <div onClick={()=>onExpand(type,{cafeName,drinkType,beanName,method,rating})}
           style={{ textAlign:'center', padding:'8px 0', borderTop:'0.5px solid '+P.cardStroke, marginBottom:10, cursor:'pointer' }}>
-          <span style={{ fontSize:10, color:P.cafe, fontFamily:'DM Mono, monospace' }}>+ add more details</span>
+          <span style={{ fontSize:10, color:P.cafe, fontFamily:'IBM Plex Mono, monospace' }}>+ add more details</span>
         </div>
         <div onClick={handleSave} style={{ background:P.cafe, borderRadius:10, padding:'13px',
           textAlign:'center', marginBottom:12, cursor:'pointer',
-          boxShadow:'0 3px 10px rgba(212,151,106,0.3)' }}>
-          <span style={{ color:'#182635', fontSize:12, fontFamily:'DM Mono, monospace', letterSpacing:'0.04em' }}>save entry</span>
+          boxShadow:'0 3px 10px rgba(40,30,20,0.30)' }}>
+          <span style={{ color:'#fff', fontSize:12, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.04em' }}>save entry</span>
         </div>
       </div>
     </div>
@@ -1534,10 +1550,10 @@ function CafeForm({ initial={}, onBack, onSave, onUpdate, customNotes=[], onAddN
         <ChipAdder label="Notes" presets={TASTING_NOTES} custom={customNotes} onCustomChange={onAddNote}
           selected={f.tastingNotes} onToggle={n=>toggleArr('tastingNotes',n)} />
         <div style={{ marginBottom:14 }}>
-          <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
+          <div style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
           {['Overall','Aroma','Taste','Texture'].map(r=>(
             <div key={r} style={{ display:'flex', alignItems:'center', gap:12, marginBottom:8 }}>
-              <span style={{ fontSize:10, color:G.label, fontFamily:'DM Mono, monospace', width:54, flexShrink:0 }}>{r}</span>
+              <span style={{ fontSize:10, color:G.label, fontFamily:'IBM Plex Mono, monospace', width:54, flexShrink:0 }}>{r}</span>
               <RatingSquares n={f.ratings[r.toLowerCase()]||0} size={16} onChange={v=>setRating(r.toLowerCase(),v)} />
             </div>
           ))}
@@ -1554,9 +1570,9 @@ function CafeForm({ initial={}, onBack, onSave, onUpdate, customNotes=[], onAddN
             border:'0.5px solid '+(f.wouldVisitAgain?P.cafe:G.chipBorder),
             background: f.wouldVisitAgain?P.cafe:G.surface,
             display:'flex', alignItems:'center', justifyContent:'center' }}>
-            {f.wouldVisitAgain && <span style={{ fontSize:10, color:'#182635', lineHeight:1 }}>✓</span>}
+            {f.wouldVisitAgain && <span style={{ fontSize:10, color:'#fff', lineHeight:1 }}>✓</span>}
           </div>
-          <span style={{ fontSize:12, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>Would visit again</span>
+          <span style={{ fontSize:12, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>Would visit again</span>
         </div>
         <GhostField label="Notes" placeholder="Anything else to remember…" value={f.notes} onChange={v=>set('notes',v)} multiline />
         <div style={{ height:32 }} />
@@ -1635,16 +1651,16 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
           onBeanSelect={b=>setF(p=>({ ...p, beanName:b.name, roaster:b.roaster||p.roaster }))} />
         <GhostField label="Roaster" placeholder="Counter Culture, Intelligentsia…" value={f.roaster} onChange={v=>set('roaster',v)} />
         {dialed && (
-          <div style={{ background:'rgba(122,154,176,0.10)', border:'0.5px solid rgba(122,154,176,0.35)',
+          <div style={{ background:'rgba(92,61,40,0.07)', border:'0.5px solid rgba(92,61,40,0.30)',
             borderRadius:12, padding:'11px 13px', marginBottom:14 }}>
-            <div style={{ fontSize:8, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', marginBottom:6 }}>★ DIALED IN · {f.method.toUpperCase()}</div>
-            <div style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, marginBottom:10 }}>
+            <div style={{ fontSize:8, color:P.brew, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.1em', marginBottom:6 }}>★ DIALED IN · {f.method.toUpperCase()}</div>
+            <div style={{ fontSize:10, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginBottom:10 }}>
               {[dialed.grindSize && `grind ${dialed.grindSize}`, dialed.dose && `dose ${dialed.dose}`,
                 dialed.water && `water ${dialed.water}`, dialed.brewTime && `time ${dialed.brewTime}`,
                 dialed.ratio].filter(Boolean).join(' · ') || 'recipe pinned'}
             </div>
             <div onClick={applyDialed} style={{ background:P.brew, borderRadius:9, padding:'9px', textAlign:'center', cursor:'pointer' }}>
-              <span style={{ fontSize:10, color:'#182635', fontFamily:'DM Mono, monospace' }}>use this recipe</span>
+              <span style={{ fontSize:10, color:'#fff', fontFamily:'IBM Plex Mono, monospace' }}>use this recipe</span>
             </div>
           </div>
         )}
@@ -1654,7 +1670,7 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
           return hist.length>0 ? <DialInPanel last={hist[0]} attempt={hist.length+1} grinder={activeGrinder} /> : null;
         })()}
         <div style={{ marginBottom:14 }}>
-          <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>
+          <div style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>
             Brew Method{!showAllMethods && ownedMethods.length>0 ? ' · your gear' : ''}
           </div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
@@ -1665,7 +1681,7 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
         </div>
         {grinders.length>1 && (
           <div style={{ marginBottom:14 }}>
-            <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Grinder</div>
+            <div style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Grinder</div>
             <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
               {grinders.map(g=><GhostChip key={g.id} label={g.n} active={f.grinder===g.n} onPress={()=>set('grinder', f.grinder===g.n?'':g.n)} />)}
             </div>
@@ -1673,7 +1689,7 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
         )}
         {isEsp && machines.length>0 && (
           <div style={{ marginBottom:14 }}>
-            <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Machine</div>
+            <div style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Machine</div>
             <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
               {machines.map(g=><GhostChip key={g.id} label={g.n} active={f.machine===g.n} onPress={()=>set('machine', f.machine===g.n?'':g.n)} />)}
             </div>
@@ -1685,7 +1701,7 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:4 }}>
           {params.map(([lbl,key,ph])=>(
             <div key={key}>
-              <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' }}>{lbl}</div>
+              <div style={{ fontSize:8.5, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' }}>{lbl}</div>
               <div style={{ height:40, background:G.surface, border:'1px solid '+G.border, borderRadius:10, display:'flex', alignItems:'center', padding:'0 12px' }}>
                 {key==='grindSize' && grindMax
                   ? <input type="number" inputMode="decimal" min={0} max={grindMax} step="any"
@@ -1697,7 +1713,7 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
           ))}
         </div>
         {activeGrinder && grindSuggestion && (
-          <div style={{ fontSize:9, color:P.brew, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:8, marginBottom:4 }}>
+          <div style={{ fontSize:9, color:P.brew, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:8, marginBottom:4 }}>
             {activeGrinder.n}: try {grindSuggestion}{activeGrinder.adj==='clicks'?' clicks':''} for {isEsp?'espresso':'filter'}
           </div>
         )}
@@ -1707,7 +1723,7 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
         <ChipAdder label="Notes" presets={TASTING_NOTES} custom={customNotes} onCustomChange={onAddNote}
           selected={f.tastingNotes} onToggle={toggleNote} />
         <div style={{ marginBottom:16 }}>
-          <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
+          <div style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
           <RatingSquares n={f.rating} size={20} onChange={v=>set('rating',v)} />
         </div>
         <FormDivider />
@@ -1827,15 +1843,15 @@ function AddBeanForm({ initial={}, onBack, onSave, onUpdate, communityBeans=[], 
               }}
               style={{ border:'1px dashed '+(scanning ? P.cafe : G.chipBorder), borderRadius:10,
                 padding:'12px', textAlign:'center', cursor:'pointer' }}>
-              <span style={{ fontSize:11, color: scanning ? P.cafe : G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+              <span style={{ fontSize:11, color: scanning ? P.cafe : G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>
                 {scanning ? '☕ reading the label…' : '📷 scan the bag — auto-fill details'}
               </span>
             </div>
-            {scanErr && <div style={{ fontSize:9, color:P.cafe, fontFamily:'DM Mono, monospace', marginTop:6, textAlign:'center' }}>{scanErr}</div>}
+            {scanErr && <div style={{ fontSize:9, color:P.cafe, fontFamily:'IBM Plex Mono, monospace', marginTop:6, textAlign:'center' }}>{scanErr}</div>}
           </div>
         )}
         <div style={{ marginBottom:12 }}>
-          <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace',
+          <div style={{ fontSize:8.5, color:G.label, fontFamily:'IBM Plex Mono, monospace',
             marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' }}>Bean Name</div>
           <div style={{ height:42, background:G.surface, border:'1px solid '+(suggestions.length?P.cafe:G.border),
             borderRadius: suggestions.length ? '10px 10px 0 0' : 10,
@@ -1855,10 +1871,10 @@ function AddBeanForm({ initial={}, onBack, onSave, onUpdate, communityBeans=[], 
                   style={{ padding:'9px 14px', borderBottom:'0.5px solid '+G.border, cursor:'pointer',
                     display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                   <div>
-                    <div style={{ fontSize:11, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{s.name}</div>
-                    {s.roaster && <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{s.roaster}</div>}
+                    <div style={{ fontSize:11, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>{s.name}</div>
+                    {s.roaster && <div style={{ fontSize:8.5, color:G.label, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>{s.roaster}</div>}
                   </div>
-                  <span style={{ fontSize:7.5, color:P.cafe, fontFamily:'DM Mono, monospace', letterSpacing:'0.06em' }}>COMMUNITY</span>
+                  <span style={{ fontSize:7.5, color:P.cafe, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.06em' }}>COMMUNITY</span>
                 </div>
               ))}
             </div>
@@ -1872,9 +1888,9 @@ function AddBeanForm({ initial={}, onBack, onSave, onUpdate, communityBeans=[], 
           selected={f.tastingNotes} onToggle={toggleNote} />
         <div style={{ marginBottom:14 }}>
           <div style={{ display:'flex', alignItems:'baseline', gap:8, marginBottom:8 }}>
-            <span style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>Roast Level</span>
+            <span style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.1em', textTransform:'uppercase' }}>Roast Level</span>
             {f.roastLevel > 0 && (
-              <span style={{ fontSize:9, color:roastColor(f.roastLevel), fontFamily:'DM Mono, monospace' }}>
+              <span style={{ fontSize:9, color:roastColor(f.roastLevel), fontFamily:'IBM Plex Mono, monospace' }}>
                 {f.roastLevel} · {roastLabel(f.roastLevel)}
               </span>
             )}
@@ -1894,12 +1910,12 @@ function AddBeanForm({ initial={}, onBack, onSave, onUpdate, communityBeans=[], 
             })}
           </div>
           <div style={{ display:'flex', justifyContent:'space-between', marginTop:4 }}>
-            <span style={{ fontSize:7.5, color:G.label, fontFamily:'DM Mono, monospace' }}>Light</span>
-            <span style={{ fontSize:7.5, color:G.label, fontFamily:'DM Mono, monospace' }}>Dark</span>
+            <span style={{ fontSize:7.5, color:G.label, fontFamily:'IBM Plex Mono, monospace' }}>Light</span>
+            <span style={{ fontSize:7.5, color:G.label, fontFamily:'IBM Plex Mono, monospace' }}>Dark</span>
           </div>
         </div>
         <div style={{ marginBottom:16 }}>
-          <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
+          <div style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
           <RatingSquares n={f.rating} size={20} onChange={v=>set('rating',v)} />
         </div>
         {!initial.id && (
@@ -1908,11 +1924,11 @@ function AddBeanForm({ initial={}, onBack, onSave, onUpdate, communityBeans=[], 
               border:'0.5px solid '+(share?P.cafe:G.chipBorder),
               background: share?P.cafe:G.surface,
               display:'flex', alignItems:'center', justifyContent:'center' }}>
-              {share && <span style={{ fontSize:10, color:'#182635', lineHeight:1 }}>✓</span>}
+              {share && <span style={{ fontSize:10, color:'#fff', lineHeight:1 }}>✓</span>}
             </div>
             <div>
-              <div style={{ fontSize:12, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>Share with the community library</div>
-              <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:2 }}>name, roaster, origin, process, roast level & the roaster's printed notes — never your own ratings</div>
+              <div style={{ fontSize:12, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>Share with the community library</div>
+              <div style={{ fontSize:8.5, color:G.label, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:2 }}>name, roaster, origin, process, roast level & the roaster's printed notes — never your own ratings</div>
             </div>
           </div>
         )}
@@ -1932,20 +1948,20 @@ function BeanLibrary({ beans, onTab, onAdd, onAddBean, onBeanPress }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
       <div style={{ padding:'18px 16px 12px', paddingTop:'calc(18px + env(safe-area-inset-top))' }}>
-        <div style={{ fontSize:28, fontWeight:500, color:P.headerText, fontFamily:'Cormorant Garamond, serif', lineHeight:1 }}>Bean Library</div>
-        <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4 }}>
+        <div style={{ fontSize:28, fontWeight:500, color:P.headerText, fontFamily:'Hanken Grotesk, sans-serif', lineHeight:1 }}>Bean Library</div>
+        <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:4 }}>
           {beans.length} bean{beans.length!==1?'s':''} tracked
         </div>
         <div style={{ marginTop:12, background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:10, display:'flex', alignItems:'center', padding:'9px 12px' }}>
           <input placeholder="Search beans, roasters…" value={search} onChange={e=>setSearch(e.target.value)}
-            style={{ fontSize:11, color:P.headerText, fontFamily:'DM Mono, monospace' }} />
+            style={{ fontSize:11, color:P.headerText, fontFamily:'IBM Plex Mono, monospace' }} />
         </div>
         <div style={{ display:'flex', gap:6, marginTop:10 }}>
           {['All','Washed','Natural','Honey'].map(p=>(
-            <div key={p} onClick={()=>setFilter(p)} style={{ fontFamily:'DM Mono, monospace', fontSize:9,
+            <div key={p} onClick={()=>setFilter(p)} style={{ fontFamily:'IBM Plex Mono, monospace', fontSize:9,
               padding:'4px 12px', borderRadius:20, cursor:'pointer',
               border:'0.5px solid '+(filter===p?P.cafe:P.cardStroke),
-              background: filter===p?'rgba(212,151,106,0.18)':P.cardBg,
+              background: filter===p?'rgba(92,61,40,0.10)':P.cardBg,
               color: filter===p?P.cafe:P.headerMuted }}>{p}</div>
           ))}
         </div>
@@ -1958,21 +1974,21 @@ function BeanLibrary({ beans, onTab, onAdd, onAddBean, onBeanPress }) {
             <BeanAvatar color={b.color} />
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:15, fontWeight:500, color:P.headerText,
-                fontFamily:'Cormorant Garamond, serif',
+                fontFamily:'Hanken Grotesk, sans-serif',
                 whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.name}</div>
-              <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:2 }}>
+              <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:2 }}>
                 {[b.roaster, b.process, roastLabel(b.roastLevel)].filter(Boolean).join(' · ')}
               </div>
               <div style={{ marginTop:8, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                 <RatingDots n={b.rating} />
-                <span style={{ fontSize:9, color:P.cafe, fontFamily:'DM Mono, monospace' }}>{b.brews} brew{b.brews!==1?'s':''}</span>
+                <span style={{ fontSize:9, color:P.cafe, fontFamily:'IBM Plex Mono, monospace' }}>{b.brews} brew{b.brews!==1?'s':''}</span>
               </div>
             </div>
           </div>
         ))}
         <div onClick={onAddBean} style={{ border:'0.5px dashed '+P.cardStroke, borderRadius:14,
           padding:'12px', textAlign:'center', marginBottom:8, cursor:'pointer' }}>
-          <span style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300 }}>+ add new bean</span>
+          <span style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>+ add new bean</span>
         </div>
         <div style={{ height:16 }} />
       </div>
@@ -2028,11 +2044,11 @@ function StatsDash({ entries, onTab, onAdd }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
       <div style={{ padding:'18px 16px 12px', paddingTop:'calc(18px + env(safe-area-inset-top))' }}>
-        <div style={{ fontSize:28, fontWeight:500, color:P.headerText, fontFamily:'Cormorant Garamond, serif', lineHeight:1 }}>Insights</div>
+        <div style={{ fontSize:28, fontWeight:500, color:P.headerText, fontFamily:'Hanken Grotesk, sans-serif', lineHeight:1 }}>Insights</div>
         <div style={{ display:'inline-flex', marginTop:12, background:P.cardBg,
           border:'0.5px solid '+P.cardStroke, borderRadius:20, padding:3, gap:2 }}>
           {[['month','This Month'],['all','All Time']].map(([val,lbl])=>(
-            <div key={val} onClick={()=>setPeriod(val)} style={{ fontFamily:'DM Mono, monospace', fontSize:9,
+            <div key={val} onClick={()=>setPeriod(val)} style={{ fontFamily:'IBM Plex Mono, monospace', fontSize:9,
               padding:'4px 12px', borderRadius:16, cursor:'pointer', transition:'all 0.15s',
               background: period===val?P.cardBg2:'transparent',
               color: period===val?P.headerText:P.headerMuted }}>{lbl}</div>
@@ -2043,14 +2059,14 @@ function StatsDash({ entries, onTab, onAdd }) {
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
           {stats.map((s,i)=>(
             <div key={i} style={{ background:P.cardBg2, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 13px' }}>
-              <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:5 }}>{s.l}</div>
-              <div style={{ fontSize:30, fontWeight:400, color:P.headerText, fontFamily:'Cormorant Garamond, serif', lineHeight:1 }}>{s.v}</div>
-              <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:3 }}>{s.s}</div>
+              <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:5 }}>{s.l}</div>
+              <div style={{ fontSize:30, fontWeight:400, color:P.headerText, fontFamily:'Hanken Grotesk, sans-serif', lineHeight:1 }}>{s.v}</div>
+              <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:3 }}>{s.s}</div>
             </div>
           ))}
         </div>
         <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 13px', marginBottom:8 }}>
-          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>Coffees per day</div>
+          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>Coffees per day</div>
           <div style={{ display:'flex', alignItems:'flex-end', gap:3, height:56 }}>
             {barData.map((v,i)=>(
               <div key={i} style={{ flex:1, height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end' }}>
@@ -2062,18 +2078,18 @@ function StatsDash({ entries, onTab, onAdd }) {
             ))}
           </div>
           <div style={{ display:'flex', justifyContent:'space-between', marginTop:6 }}>
-            <span style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>{fmt(d1)}</span>
-            <span style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>{fmt(now)}</span>
+            <span style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace' }}>{fmt(d1)}</span>
+            <span style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace' }}>{fmt(now)}</span>
           </div>
         </div>
         {topMethods.length>0 && (
           <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 13px', marginBottom:8 }}>
-            <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>Top Brew Methods</div>
+            <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>Top Brew Methods</div>
             {topMethods.map((r,i)=>(
               <div key={i} style={{ marginBottom: i<topMethods.length-1?10:0 }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:4 }}>
-                  <span style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>{r.m}</span>
-                  <span style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>{r.p}%</span>
+                  <span style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace' }}>{r.m}</span>
+                  <span style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace' }}>{r.p}%</span>
                 </div>
                 <div style={{ height:4, borderRadius:3, background:P.cardBg2 }}>
                   <div style={{ width:r.p+'%', height:'100%', borderRadius:3, background:i===0?P.cafe:P.brew, transition:'width 0.3s' }} />
@@ -2084,10 +2100,10 @@ function StatsDash({ entries, onTab, onAdd }) {
         )}
         {(enjoyNotes.length>0||dislikeNotes.length>0) && (
           <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 13px', marginBottom:8 }}>
-            <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>Taste Profile</div>
+            <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>Taste Profile</div>
             {enjoyNotes.length>0 && (
               <div style={{ marginBottom:dislikeNotes.length>0?10:0 }}>
-                <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginBottom:6 }}>You tend to enjoy</div>
+                <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', marginBottom:6 }}>You tend to enjoy</div>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
                   {enjoyNotes.map(n=><GhostChip key={n} label={n} active />)}
                 </div>
@@ -2095,7 +2111,7 @@ function StatsDash({ entries, onTab, onAdd }) {
             )}
             {dislikeNotes.length>0 && (
               <div>
-                <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginBottom:6 }}>You tend to dislike</div>
+                <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', marginBottom:6 }}>You tend to dislike</div>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
                   {dislikeNotes.map(n=><GhostChip key={n} label={n} />)}
                 </div>
@@ -2141,14 +2157,14 @@ function GearLocker({ gear, onChange, onRemove, catalog=GEAR_CATALOG }) {
   const catLabel = c => (GEAR_CATS.find(([k])=>k===c)||[c,c])[1];
 
   const smallInput = { fontSize:10, color:G.text, background:G.surface, border:'1px solid '+G.border,
-    borderRadius:8, padding:'6px 10px', fontFamily:'DM Mono, monospace', fontWeight:300 };
+    borderRadius:8, padding:'6px 10px', fontFamily:'IBM Plex Mono, monospace', fontWeight:300 };
 
   return (
     <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
-      <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>My Gear</div>
+      <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>My Gear</div>
 
       {gear.length===0 && !ql && !customMode && (
-        <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6, marginBottom:10 }}>
+        <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, lineHeight:1.6, marginBottom:10 }}>
           Add your grinder and brewers — the brew form will adapt to what you own.
         </div>
       )}
@@ -2160,8 +2176,8 @@ function GearLocker({ gear, onChange, onRemove, catalog=GEAR_CATALOG }) {
               border:'0.5px solid '+(editId===g.id?P.cafe:P.cardStroke), borderRadius:10,
               padding:'9px 12px', cursor:'pointer' }}>
             <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:12, color:P.headerText, fontFamily:'DM Mono, monospace', fontWeight:400 }}>{g.n}</div>
-              <div style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:2 }}>
+              <div style={{ fontSize:12, color:P.headerText, fontFamily:'IBM Plex Mono, monospace', fontWeight:400 }}>{g.n}</div>
+              <div style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:2 }}>
                 {[catLabel(g.c), g.adj, g.filter && `filter ${g.filter}`, g.esp && `esp ${g.esp}`].filter(Boolean).join(' · ')}
               </div>
             </div>
@@ -2171,7 +2187,7 @@ function GearLocker({ gear, onChange, onRemove, catalog=GEAR_CATALOG }) {
           {editId===g.id && g.c==='grinder' && (
             <div style={{ background:'rgba(220,205,180,0.05)', border:'0.5px solid '+P.cardStroke, borderTop:'none',
               borderRadius:'0 0 10px 10px', padding:'10px 12px', margin:'0 4px' }}>
-              <div style={{ fontSize:8, color:G.label, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>Adjustment</div>
+              <div style={{ fontSize:8, color:G.label, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>Adjustment</div>
               <div style={{ display:'flex', gap:5, marginBottom:10 }}>
                 {['clicks','dial','stepless'].map(a=>(
                   <GhostChip key={a} label={a} active={g.adj===a} onPress={()=>update(g.id,'adj',a)} />
@@ -2179,15 +2195,15 @@ function GearLocker({ gear, onChange, onRemove, catalog=GEAR_CATALOG }) {
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
                 <div>
-                  <div style={{ fontSize:8, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.08em' }}>Filter setting</div>
+                  <div style={{ fontSize:8, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.08em' }}>Filter setting</div>
                   <input value={g.filter||''} placeholder="e.g. 22–28" onChange={e=>update(g.id,'filter',e.target.value)} style={smallInput} />
                 </div>
                 <div>
-                  <div style={{ fontSize:8, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.08em' }}>Espresso setting</div>
+                  <div style={{ fontSize:8, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.08em' }}>Espresso setting</div>
                   <input value={g.esp||''} placeholder="e.g. 8–12" onChange={e=>update(g.id,'esp',e.target.value)} style={smallInput} />
                 </div>
                 <div>
-                  <div style={{ fontSize:8, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.08em' }}>Range max</div>
+                  <div style={{ fontSize:8, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.08em' }}>Range max</div>
                   <input type="number" value={g.max||''} placeholder="e.g. 40"
                     onChange={e=>update(g.id,'max', e.target.value==='' ? '' : parseFloat(e.target.value))} style={smallInput} />
                 </div>
@@ -2211,12 +2227,12 @@ function GearLocker({ gear, onChange, onRemove, catalog=GEAR_CATALOG }) {
                 <div key={it.n} onClick={()=>add(it)}
                   style={{ padding:'9px 12px', borderBottom:'0.5px solid '+G.border, cursor:'pointer',
                     display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                  <span style={{ fontSize:11, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{it.n}</span>
-                  <span style={{ fontSize:8, color:G.label, fontFamily:'DM Mono, monospace' }}>{catLabel(it.c)}</span>
+                  <span style={{ fontSize:11, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>{it.n}</span>
+                  <span style={{ fontSize:8, color:G.label, fontFamily:'IBM Plex Mono, monospace' }}>{catLabel(it.c)}</span>
                 </div>
               ))}
               <div onClick={()=>{ setCustom(true); setCName(q); }} style={{ padding:'9px 12px', cursor:'pointer' }}>
-                <span style={{ fontSize:10, color:P.cafe, fontFamily:'DM Mono, monospace' }}>+ add "{q}" as custom gear</span>
+                <span style={{ fontSize:10, color:P.cafe, fontFamily:'IBM Plex Mono, monospace' }}>+ add "{q}" as custom gear</span>
               </div>
             </div>
           )}
@@ -2225,7 +2241,7 @@ function GearLocker({ gear, onChange, onRemove, catalog=GEAR_CATALOG }) {
 
       {customMode && (
         <div style={{ marginTop:8, background:'rgba(220,205,180,0.05)', border:'0.5px solid '+P.cardStroke, borderRadius:10, padding:'10px 12px' }}>
-          <div style={{ fontSize:8, color:G.label, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>Category</div>
+          <div style={{ fontSize:8, color:G.label, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>Category</div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:10 }}>
             {GEAR_CATS.map(([k,l])=><GhostChip key={k} label={l} active={cCat===k} onPress={()=>setCCat(k)} />)}
           </div>
@@ -2235,7 +2251,7 @@ function GearLocker({ gear, onChange, onRemove, catalog=GEAR_CATALOG }) {
           </div>
           {cCat==='grinder' && (
             <>
-              <div style={{ fontSize:8, color:G.label, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>How do you set grind size?</div>
+              <div style={{ fontSize:8, color:G.label, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>How do you set grind size?</div>
               <div style={{ display:'flex', gap:5, marginBottom:10 }}>
                 {['clicks','dial','stepless'].map(a=><GhostChip key={a} label={a} active={cAdj===a} onPress={()=>setCAdj(a)} />)}
               </div>
@@ -2246,16 +2262,16 @@ function GearLocker({ gear, onChange, onRemove, catalog=GEAR_CATALOG }) {
               border:'0.5px solid '+(cShare?P.cafe:G.chipBorder),
               background: cShare?P.cafe:G.surface,
               display:'flex', alignItems:'center', justifyContent:'center' }}>
-              {cShare && <span style={{ fontSize:9, color:'#182635', lineHeight:1 }}>✓</span>}
+              {cShare && <span style={{ fontSize:9, color:'#fff', lineHeight:1 }}>✓</span>}
             </div>
-            <span style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', fontWeight:300 }}>share with the community library</span>
+            <span style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>share with the community library</span>
           </div>
           <div style={{ display:'flex', gap:8 }}>
             <div onClick={addCustom} style={{ flex:1, background:P.cafe, borderRadius:8, padding:'8px', textAlign:'center', cursor:'pointer' }}>
-              <span style={{ fontSize:10, color:'#182635', fontFamily:'DM Mono, monospace' }}>add</span>
+              <span style={{ fontSize:10, color:'#fff', fontFamily:'IBM Plex Mono, monospace' }}>add</span>
             </div>
             <div onClick={()=>{ setCustom(false); setCName(''); setCShare(false); }} style={{ flex:1, border:'1px solid '+G.chipBorder, borderRadius:8, padding:'8px', textAlign:'center', cursor:'pointer' }}>
-              <span style={{ fontSize:10, color:G.label, fontFamily:'DM Mono, monospace' }}>cancel</span>
+              <span style={{ fontSize:10, color:G.label, fontFamily:'IBM Plex Mono, monospace' }}>cancel</span>
             </div>
           </div>
         </div>
@@ -2274,7 +2290,7 @@ function AccountCard({ session, syncState, lastSyncAt, onSync }) {
   if (!SB) return null;
 
   const inputStyle = { fontSize:11, color:G.text, background:G.surface, border:'1px solid '+G.border,
-    borderRadius:10, padding:'10px 12px', fontFamily:'DM Mono, monospace', fontWeight:300 };
+    borderRadius:10, padding:'10px 12px', fontFamily:'IBM Plex Mono, monospace', fontWeight:300 };
 
   const submit = async () => {
     const em = email.trim().toLowerCase();
@@ -2290,13 +2306,13 @@ function AccountCard({ session, syncState, lastSyncAt, onSync }) {
 
   return (
     <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
-      <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>Account</div>
+      <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>Account</div>
       {session ? (
         <>
-          <div style={{ fontSize:11, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+          <div style={{ fontSize:11, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>
             signed in as <span style={{ color:P.cafe }}>{session.user.email}</span>
           </div>
-          <div style={{ fontSize:9, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4, lineHeight:1.6,
+          <div style={{ fontSize:9, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:4, lineHeight:1.6,
             color: syncState==='error' ? P.cafe : P.headerMuted }}>
             {syncState==='syncing' ? '↻ syncing…'
               : syncState==='error' ? 'sync failed — check connection & retry'
@@ -2307,17 +2323,17 @@ function AccountCard({ session, syncState, lastSyncAt, onSync }) {
             <div onClick={onSync}
               style={{ flex:1, border:'1px solid '+P.brew, borderRadius:9, padding:'8px', textAlign:'center',
                 cursor:'pointer', opacity: syncState==='syncing'?0.5:1 }}>
-              <span style={{ fontSize:10, color:P.brew, fontFamily:'DM Mono, monospace' }}>sync now</span>
+              <span style={{ fontSize:10, color:P.brew, fontFamily:'IBM Plex Mono, monospace' }}>sync now</span>
             </div>
             <div onClick={()=>SB.auth.signOut()}
               style={{ flex:1, border:'1px solid '+G.chipBorder, borderRadius:9, padding:'8px', textAlign:'center', cursor:'pointer' }}>
-              <span style={{ fontSize:10, color:G.label, fontFamily:'DM Mono, monospace' }}>sign out</span>
+              <span style={{ fontSize:10, color:G.label, fontFamily:'IBM Plex Mono, monospace' }}>sign out</span>
             </div>
           </div>
         </>
       ) : (
         <>
-          <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginBottom:8, lineHeight:1.6 }}>
+          <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginBottom:8, lineHeight:1.6 }}>
             {mode==='signup' ? 'create an account to back up your diary & sync across devices' : 'sign in to your account'}
           </div>
           <input type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" value={email}
@@ -2329,17 +2345,17 @@ function AccountCard({ session, syncState, lastSyncAt, onSync }) {
             style={{ ...inputStyle, marginBottom:8, width:'100%' }} />
           <div onClick={busy?undefined:submit} style={{ background:P.cafe, borderRadius:9, padding:'10px', textAlign:'center',
             cursor:'pointer', opacity: busy?0.6:1 }}>
-            <span style={{ fontSize:10, color:'#182635', fontFamily:'DM Mono, monospace' }}>
+            <span style={{ fontSize:10, color:'#fff', fontFamily:'IBM Plex Mono, monospace' }}>
               {busy ? 'please wait…' : mode==='signup' ? 'create account' : 'sign in'}
             </span>
           </div>
           <div onClick={()=>{ setMode(mode==='signup'?'signin':'signup'); setErr(''); }}
             style={{ marginTop:8, textAlign:'center', cursor:'pointer' }}>
-            <span style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>
+            <span style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace' }}>
               {mode==='signup' ? 'already have an account? sign in' : 'new here? create an account'}
             </span>
           </div>
-          {err && <div style={{ fontSize:9, color:P.cafe, fontFamily:'DM Mono, monospace', marginTop:8, textAlign:'center' }}>{err}</div>}
+          {err && <div style={{ fontSize:9, color:P.cafe, fontFamily:'IBM Plex Mono, monospace', marginTop:8, textAlign:'center' }}>{err}</div>}
         </>
       )}
     </div>
@@ -2359,8 +2375,8 @@ function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, on
         <div style={{ width:72, height:72, borderRadius:'50%', background:P.cardBg2,
           border:'0.5px solid '+P.cardStroke, display:'flex', alignItems:'center',
           justifyContent:'center', marginBottom:12, fontSize:32 }}>☕</div>
-        <div style={{ fontSize:20, fontWeight:500, color:P.headerText, fontFamily:'Cormorant Garamond, serif' }}>Coffee Diary</div>
-        <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4 }}>Your personal coffee journal</div>
+        <div style={{ fontSize:20, fontWeight:500, color:P.headerText, fontFamily:'Hanken Grotesk, sans-serif' }}>Coffee Diary</div>
+        <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:4 }}>Your personal coffee journal</div>
       </div>
       <div className="scroll-y" style={{ flex:1, padding:'0 16px' }}>
         <AccountCard session={session} syncState={syncState} lastSyncAt={lastSyncAt} onSync={onSync} />
@@ -2368,8 +2384,8 @@ function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, on
           {[['Total',total],['Café',cafe],['Brews',brew]].map(([l,v])=>(
             <div key={l} style={{ background:P.cardBg2, border:'0.5px solid '+P.cardStroke,
               borderRadius:14, padding:'12px 10px', textAlign:'center' }}>
-              <div style={{ fontSize:26, fontWeight:400, color:P.headerText, fontFamily:'Cormorant Garamond, serif', lineHeight:1 }}>{v}</div>
-              <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', marginTop:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>{l}</div>
+              <div style={{ fontSize:26, fontWeight:400, color:P.headerText, fontFamily:'Hanken Grotesk, sans-serif', lineHeight:1 }}>{v}</div>
+              <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', marginTop:4, textTransform:'uppercase', letterSpacing:'0.06em' }}>{l}</div>
             </div>
           ))}
         </div>
@@ -2380,16 +2396,16 @@ function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, on
           if (!n) return null;
           return (
             <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
-              <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>Community</div>
-              <div style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6 }}>
+              <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>Community</div>
+              <div style={{ fontSize:10, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, lineHeight:1.6 }}>
                 {n} submission{n!==1?'s':''} queued — will sync automatically once community sharing goes live.
               </div>
             </div>
           );
         })()}
         <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
-          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>Brew Timer</div>
-          <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6, marginBottom:10 }}>
+          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>Brew Timer</div>
+          <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, lineHeight:1.6, marginBottom:10 }}>
             {timerMode==='staged'
               ? 'Guided: each stage is its own countdown that chimes when done; manual steps wait for a tap.'
               : 'Checklist: one running clock with the method’s steps highlighted as time passes.'}
@@ -2400,30 +2416,30 @@ function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, on
                 style={{ flex:1, borderRadius:9, padding:'9px', textAlign:'center', cursor:'pointer',
                   background: timerMode===val ? P.brew : 'transparent',
                   border:'1px solid '+(timerMode===val ? P.brew : G.chipBorder) }}>
-                <span style={{ fontSize:10, fontFamily:'DM Mono, monospace', color: timerMode===val ? '#182635' : G.text }}>{lbl}</span>
+                <span style={{ fontSize:10, fontFamily:'IBM Plex Mono, monospace', color: timerMode===val ? '#fff' : G.text }}>{lbl}</span>
               </div>
             ))}
           </div>
         </div>
         <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
-          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>Backup</div>
-          <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6, marginBottom:10 }}>
+          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>Backup</div>
+          <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, lineHeight:1.6, marginBottom:10 }}>
             Download a copy of your diary, or restore one. Kept on your device — a safety net independent of cloud sync.
           </div>
           <input ref={importRef} type="file" accept="application/json,.json" style={{ display:'none' }}
             onChange={e=>{ const file = e.target.files && e.target.files[0]; if (file && onImport) onImport(file); e.target.value=''; }} />
           <div style={{ display:'flex', gap:8 }}>
             <div onClick={onExport} style={{ flex:1, border:'1px solid '+G.chipBorder, borderRadius:9, padding:'9px', textAlign:'center', cursor:'pointer' }}>
-              <span style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace' }}>export</span>
+              <span style={{ fontSize:10, color:G.text, fontFamily:'IBM Plex Mono, monospace' }}>export</span>
             </div>
             <div onClick={()=>importRef.current && importRef.current.click()} style={{ flex:1, border:'1px solid '+G.chipBorder, borderRadius:9, padding:'9px', textAlign:'center', cursor:'pointer' }}>
-              <span style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace' }}>import</span>
+              <span style={{ fontSize:10, color:G.text, fontFamily:'IBM Plex Mono, monospace' }}>import</span>
             </div>
           </div>
         </div>
         <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
-          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'DM Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>About</div>
-          <div style={{ fontSize:12, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.6 }}>
+          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>About</div>
+          <div style={{ fontSize:12, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, lineHeight:1.6 }}>
             Track coffee experiences, at home or outside. Log cafés, home brews, tasting notes, and brew parameters — all in one place.
           </div>
         </div>
@@ -2439,9 +2455,9 @@ function DetailRow({ label, value }) {
   if (!value) return null;
   return (
     <div style={{ marginBottom:10 }}>
-      <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace',
+      <div style={{ fontSize:8.5, color:G.label, fontFamily:'IBM Plex Mono, monospace',
         marginBottom:3, letterSpacing:'0.1em', textTransform:'uppercase' }}>{label}</div>
-      <div style={{ fontSize:13, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300, lineHeight:1.5 }}>{value}</div>
+      <div style={{ fontSize:13, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, lineHeight:1.5 }}>{value}</div>
     </div>
   );
 }
@@ -2451,7 +2467,7 @@ function BeanPicker({ beans=[], value='', onChange, onBeanSelect }) {
   const [customMode, setCustomMode] = useState(beans.length===0 || (!!value && !beans.some(b=>b.name===value)));
   if (customMode || beans.length===0) return (
     <div style={{ marginBottom:12 }}>
-      <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace',
+      <div style={{ fontSize:8.5, color:G.label, fontFamily:'IBM Plex Mono, monospace',
         marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' }}>Bean Name</div>
       <div style={{ height:42, background:G.surface, border:'1px solid '+G.border,
         borderRadius:10, display:'flex', alignItems:'center', padding:'0 14px' }}>
@@ -2460,7 +2476,7 @@ function BeanPicker({ beans=[], value='', onChange, onBeanSelect }) {
       </div>
       {beans.length>0 && (
         <div onClick={()=>{ setCustomMode(false); onChange(''); }}
-          style={{ fontSize:9, color:P.cafe, marginTop:5, fontFamily:'DM Mono, monospace', cursor:'pointer' }}>
+          style={{ fontSize:9, color:P.cafe, marginTop:5, fontFamily:'IBM Plex Mono, monospace', cursor:'pointer' }}>
           ← choose from saved beans
         </div>
       )}
@@ -2468,7 +2484,7 @@ function BeanPicker({ beans=[], value='', onChange, onBeanSelect }) {
   );
   return (
     <div style={{ marginBottom:12 }}>
-      <div style={{ fontSize:8.5, color:G.label, fontFamily:'DM Mono, monospace',
+      <div style={{ fontSize:8.5, color:G.label, fontFamily:'IBM Plex Mono, monospace',
         marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' }}>Bean Name</div>
       <div onClick={()=>setOpen(o=>!o)} style={{ height:42, background:G.surface,
         border:'1px solid '+(open?P.cafe:G.border),
@@ -2476,7 +2492,7 @@ function BeanPicker({ beans=[], value='', onChange, onBeanSelect }) {
         display:'flex', alignItems:'center', justifyContent:'space-between',
         padding:'0 14px', cursor:'pointer' }}>
         <span style={{ fontSize:12, color:value?G.text:G.placeholder,
-          fontFamily:'DM Mono, monospace', fontWeight:300 }}>{value||'Select a bean…'}</span>
+          fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>{value||'Select a bean…'}</span>
         <span style={{ fontSize:9, color:G.label }}>{open?'▲':'▼'}</span>
       </div>
       {open && (
@@ -2485,12 +2501,12 @@ function BeanPicker({ beans=[], value='', onChange, onBeanSelect }) {
           {beans.map(b=>(
             <div key={b.id} onClick={()=>{ onChange(b.name); onBeanSelect&&onBeanSelect(b); setOpen(false); }}
               style={{ padding:'10px 14px', borderBottom:'0.5px solid '+G.border,
-                cursor:'pointer', background:b.name===value?'rgba(212,151,106,0.12)':'transparent',
+                cursor:'pointer', background:b.name===value?'rgba(92,61,40,0.07)':'transparent',
                 display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div>
-                <div style={{ fontSize:12, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{b.name}</div>
+                <div style={{ fontSize:12, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>{b.name}</div>
                 {(b.roaster || roastLabel(b.roastLevel)) && (
-                  <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+                  <div style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>
                     {[b.roaster, roastLabel(b.roastLevel)].filter(Boolean).join(' · ')}
                   </div>
                 )}
@@ -2500,7 +2516,7 @@ function BeanPicker({ beans=[], value='', onChange, onBeanSelect }) {
           ))}
           <div onClick={()=>{ setCustomMode(true); setOpen(false); onChange(''); }}
             style={{ padding:'10px 14px', cursor:'pointer' }}>
-            <span style={{ fontSize:11, color:P.cafe, fontFamily:'DM Mono, monospace' }}>+ enter new bean name</span>
+            <span style={{ fontSize:11, color:P.cafe, fontFamily:'IBM Plex Mono, monospace' }}>+ enter new bean name</span>
           </div>
         </div>
       )}
@@ -2528,10 +2544,10 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
       <div style={{ padding:'8px 16px', paddingTop:'calc(8px + env(safe-area-inset-top))',
         display:'flex', justifyContent:'space-between', alignItems:'center',
-        borderBottom:'0.5px solid rgba(240,228,204,0.15)', background:P.bg, flexShrink:0 }}>
+        borderBottom:'0.5px solid #ECE7DE', background:P.bg, flexShrink:0 }}>
         <div onClick={onBack} style={{ fontSize:11, color:P.cafe, cursor:'pointer', padding:'4px 0' }}>← Back</div>
         <div style={{ fontSize:13, fontWeight:500, color:G.text,
-          fontFamily:'Cormorant Garamond, serif', letterSpacing:'0.04em' }}>
+          fontFamily:'Hanken Grotesk, sans-serif', letterSpacing:'0.04em' }}>
           {isBrew ? 'Home Brew' : 'Café Visit'}
         </div>
         <div onClick={onEdit} style={{ fontSize:11, color:P.cafe, fontWeight:600, cursor:'pointer', padding:'4px 0' }}>Edit</div>
@@ -2539,10 +2555,10 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
       <div className="scroll-y" style={{ flex:1, padding:'16px' }}>
         <div style={{ marginBottom:16 }}>
           <div style={{ fontSize:24, fontWeight:500, color:P.headerText,
-            fontFamily:'Cormorant Garamond, serif', lineHeight:1.2 }}>{title}</div>
-          {!isBrew && entry.location && <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4 }}>{entry.location}</div>}
-          {isBrew && entry.roaster && <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4 }}>{entry.roaster}</div>}
-          <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:6 }}>
+            fontFamily:'Hanken Grotesk, sans-serif', lineHeight:1.2 }}>{title}</div>
+          {!isBrew && entry.location && <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:4 }}>{entry.location}</div>}
+          {isBrew && entry.roaster && <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:4 }}>{entry.roaster}</div>}
+          <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:6 }}>
             {dateStr} · {formatTime(entry.date)}
           </div>
         </div>
@@ -2554,7 +2570,7 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
               <div style={{marginBottom:10}}>
                 {['Overall','Aroma','Taste','Texture'].filter(r=>entry.ratings[r.toLowerCase()]>0).map(r=>(
                   <div key={r} style={{display:'flex',alignItems:'center',gap:12,marginBottom:6}}>
-                    <span style={{fontSize:10,color:G.label,fontFamily:'DM Mono, monospace',width:54,flexShrink:0}}>{r}</span>
+                    <span style={{fontSize:10,color:G.label,fontFamily:'IBM Plex Mono, monospace',width:54,flexShrink:0}}>{r}</span>
                     <RatingSquares n={entry.ratings[r.toLowerCase()]} size={14} />
                   </div>
                 ))}
@@ -2562,7 +2578,7 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
             )}
             {(entry.vibeTags?.length>0||entry.wouldVisitAgain) && (<><FormDivider /><SectionHead label="Vibe" /><div style={{height:6}}/>
               {entry.vibeTags?.length>0 && <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>{entry.vibeTags.map(t=><GhostChip key={t} label={t} active />)}</div>}
-              {entry.wouldVisitAgain && <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}><div style={{width:16,height:16,borderRadius:4,background:P.cafe,display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:10,color:'#182635'}}>✓</span></div><span style={{fontSize:12,color:G.text,fontFamily:'DM Mono, monospace',fontWeight:300}}>Would visit again</span></div>}
+              {entry.wouldVisitAgain && <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}><div style={{width:16,height:16,borderRadius:4,background:P.cafe,display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:10,color:'#fff'}}>✓</span></div><span style={{fontSize:12,color:G.text,fontFamily:'IBM Plex Mono, monospace',fontWeight:300}}>Would visit again</span></div>}
             </>)}
           </>
         )}
@@ -2570,7 +2586,7 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
           <>
             <FormDivider />
             <div style={{marginBottom:10}}>
-              <div style={{fontSize:9,color:G.label,fontFamily:'DM Mono, monospace',marginBottom:6,letterSpacing:'0.1em',textTransform:'uppercase'}}>Method</div>
+              <div style={{fontSize:9,color:G.label,fontFamily:'IBM Plex Mono, monospace',marginBottom:6,letterSpacing:'0.1em',textTransform:'uppercase'}}>Method</div>
               {entry.method && <div style={{display:'inline-block'}}><GhostChip label={entry.method} active /></div>}
             </div>
             {(() => {
@@ -2585,8 +2601,8 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
                     {rows.map(([l,v])=>(
                       <div key={l}>
-                        <div style={{fontSize:8,color:G.label,fontFamily:'DM Mono, monospace',letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:2}}>{l}</div>
-                        <div style={{fontSize:13,color:G.text,fontFamily:'DM Mono, monospace',fontWeight:300}}>{v}</div>
+                        <div style={{fontSize:8,color:G.label,fontFamily:'IBM Plex Mono, monospace',letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:2}}>{l}</div>
+                        <div style={{fontSize:13,color:G.text,fontFamily:'IBM Plex Mono, monospace',fontWeight:300}}>{v}</div>
                       </div>
                     ))}
                   </div>
@@ -2594,24 +2610,24 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
               );
             })()}
             {entry.tastingNotes?.length>0 && (<><FormDivider /><SectionHead label="Tasting" /><div style={{height:6}}/><div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>{entry.tastingNotes.map(n=><GhostChip key={n} label={n} active />)}</div></>)}
-            {entry.rating>0 && <div style={{marginBottom:10}}><div style={{fontSize:9,color:G.label,fontFamily:'DM Mono, monospace',marginBottom:6,letterSpacing:'0.1em',textTransform:'uppercase'}}>Rating</div><RatingSquares n={entry.rating} size={16} /></div>}
+            {entry.rating>0 && <div style={{marginBottom:10}}><div style={{fontSize:9,color:G.label,fontFamily:'IBM Plex Mono, monospace',marginBottom:6,letterSpacing:'0.1em',textTransform:'uppercase'}}>Rating</div><RatingSquares n={entry.rating} size={16} /></div>}
             <div style={{ display:'flex', gap:8, marginTop:6, marginBottom:10 }}>
               <div onClick={()=>onStartTimer && onStartTimer(entry)}
                 style={{ flex:1, background:P.brew, borderRadius:10, padding:'10px', textAlign:'center', cursor:'pointer' }}>
-                <span style={{ fontSize:10, color:'#182635', fontFamily:'DM Mono, monospace' }}>▶ brew with timer</span>
+                <span style={{ fontSize:10, color:'#fff', fontFamily:'IBM Plex Mono, monospace' }}>▶ brew with timer</span>
               </div>
               <div onClick={()=>onBrewAgain && onBrewAgain(entry)}
                 style={{ flex:1, border:'1px solid '+P.brew, borderRadius:10, padding:'10px', textAlign:'center', cursor:'pointer' }}>
-                <span style={{ fontSize:10, color:P.brew, fontFamily:'DM Mono, monospace' }}>↻ log again</span>
+                <span style={{ fontSize:10, color:P.brew, fontFamily:'IBM Plex Mono, monospace' }}>↻ log again</span>
               </div>
             </div>
             {canPin && (
               <div onClick={()=>{ if(!pinned){ onPinDialed(entry); setPinned(true); } }}
                 style={{ marginBottom:10, padding:'11px', borderRadius:10, textAlign:'center',
                   cursor: pinned ? 'default' : 'pointer',
-                  background: pinned ? 'rgba(122,154,176,0.15)' : 'transparent',
+                  background: pinned ? 'rgba(92,61,40,0.10)' : 'transparent',
                   border:'1px solid '+(pinned ? P.brew : G.chipBorder) }}>
-                <span style={{ fontSize:11, color: pinned ? P.brew : G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+                <span style={{ fontSize:11, color: pinned ? P.brew : G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>
                   {pinned ? `✓ pinned as ${entry.method||'go-to'} recipe for ${entry.beanName}` : `★ pin as dialed-in ${entry.method||''} recipe`.replace('  ',' ')}
                 </span>
               </div>
@@ -2620,9 +2636,9 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
               <div onClick={shareRecipe}
                 style={{ marginBottom:10, padding:'11px', borderRadius:10, textAlign:'center',
                   cursor: shared ? 'default' : 'pointer',
-                  background: shared ? 'rgba(212,151,106,0.12)' : 'transparent',
+                  background: shared ? 'rgba(92,61,40,0.07)' : 'transparent',
                   border:'1px solid '+(shared ? P.cafe : G.chipBorder) }}>
-                <span style={{ fontSize:11, color: shared ? P.cafe : G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+                <span style={{ fontSize:11, color: shared ? P.cafe : G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>
                   {shared ? '✓ recipe queued for the community library' : 'share this recipe with the community →'}
                 </span>
               </div>
@@ -2631,7 +2647,7 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
         )}
         {(entry.notes||entry.whatIdChange||entry.recipe) && (
           <><FormDivider /><SectionHead label="Notes" /><div style={{height:6}}/>
-            {entry.notes && <div style={{fontSize:12,color:G.text,fontFamily:'DM Mono, monospace',fontWeight:300,lineHeight:1.6,marginBottom:10}}>{entry.notes}</div>}
+            {entry.notes && <div style={{fontSize:12,color:G.text,fontFamily:'IBM Plex Mono, monospace',fontWeight:300,lineHeight:1.6,marginBottom:10}}>{entry.notes}</div>}
             <DetailRow label="What I'd Change" value={entry.whatIdChange} />
             <DetailRow label="Recipe / Steps" value={entry.recipe} />
           </>
@@ -2651,18 +2667,18 @@ function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow, communityReci
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
       <div style={{ padding:'8px 16px', paddingTop:'calc(8px + env(safe-area-inset-top))',
         display:'flex', justifyContent:'space-between', alignItems:'center',
-        borderBottom:'0.5px solid rgba(240,228,204,0.15)', background:P.bg, flexShrink:0 }}>
+        borderBottom:'0.5px solid #ECE7DE', background:P.bg, flexShrink:0 }}>
         <div onClick={onBack} style={{ fontSize:11, color:P.cafe, cursor:'pointer', padding:'4px 0' }}>← Back</div>
-        <div style={{ fontSize:13, fontWeight:500, color:G.text, fontFamily:'Cormorant Garamond, serif' }}>Bean Detail</div>
+        <div style={{ fontSize:13, fontWeight:500, color:G.text, fontFamily:'Hanken Grotesk, sans-serif' }}>Bean Detail</div>
         <div onClick={onEdit} style={{ fontSize:11, color:P.cafe, fontWeight:600, cursor:'pointer', padding:'4px 0' }}>Edit</div>
       </div>
       <div className="scroll-y" style={{ flex:1, padding:'16px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:20 }}>
           <BeanAvatar color={bean.color||'#6B8FA8'} />
           <div>
-            <div style={{ fontSize:22, fontWeight:500, color:P.headerText, fontFamily:'Cormorant Garamond, serif', lineHeight:1.2 }}>{bean.name}</div>
-            {bean.roaster && <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:4 }}>{bean.roaster}</div>}
-            {bean.origin && <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:2 }}>{bean.origin}</div>}
+            <div style={{ fontSize:22, fontWeight:500, color:P.headerText, fontFamily:'Hanken Grotesk, sans-serif', lineHeight:1.2 }}>{bean.name}</div>
+            {bean.roaster && <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:4 }}>{bean.roaster}</div>}
+            {bean.origin && <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:2 }}>{bean.origin}</div>}
           </div>
         </div>
         <FormDivider />
@@ -2670,7 +2686,7 @@ function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow, communityReci
           {bean.process && <GhostChip label={bean.process} active />}
           {roastLabel(bean.roastLevel) && (
             <div style={{ padding:'5px 13px', borderRadius:20, fontSize:10,
-              fontFamily:'DM Mono, monospace', fontWeight:300, letterSpacing:'0.02em',
+              fontFamily:'IBM Plex Mono, monospace', fontWeight:300, letterSpacing:'0.02em',
               background: roastColor(bean.roastLevel)+'22',
               color: roastColor(bean.roastLevel),
               border:'1px solid '+roastColor(bean.roastLevel)+'66' }}>
@@ -2680,7 +2696,7 @@ function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow, communityReci
         </div>
         {bean.roastLevel > 0 && (
           <div style={{ marginBottom:14 }}>
-            <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Roast Level</div>
+            <div style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Roast Level</div>
             <div style={{ display:'flex', gap:4, marginBottom:4 }}>
               {Array.from({length:10},(_,i)=>{
                 const n = i+1;
@@ -2690,15 +2706,15 @@ function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow, communityReci
               })}
             </div>
             <div style={{ display:'flex', justifyContent:'space-between' }}>
-              <span style={{ fontSize:7.5, color:G.label, fontFamily:'DM Mono, monospace' }}>Light</span>
-              <span style={{ fontSize:9, color:roastColor(bean.roastLevel), fontFamily:'DM Mono, monospace' }}>{bean.roastLevel} / 10</span>
-              <span style={{ fontSize:7.5, color:G.label, fontFamily:'DM Mono, monospace' }}>Dark</span>
+              <span style={{ fontSize:7.5, color:G.label, fontFamily:'IBM Plex Mono, monospace' }}>Light</span>
+              <span style={{ fontSize:9, color:roastColor(bean.roastLevel), fontFamily:'IBM Plex Mono, monospace' }}>{bean.roastLevel} / 10</span>
+              <span style={{ fontSize:7.5, color:G.label, fontFamily:'IBM Plex Mono, monospace' }}>Dark</span>
             </div>
           </div>
         )}
         {bean.tastingNotes?.length>0 && (
           <div style={{ marginBottom:14 }}>
-            <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Roaster's Notes</div>
+            <div style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Roaster's Notes</div>
             <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
               {bean.tastingNotes.map(n=><GhostChip key={n} label={n} active />)}
             </div>
@@ -2706,7 +2722,7 @@ function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow, communityReci
         )}
         {bean.rating>0 && (
           <div style={{ marginBottom:14 }}>
-            <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:6, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
+            <div style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:6, letterSpacing:'0.1em', textTransform:'uppercase' }}>Rating</div>
             <RatingSquares n={bean.rating} size={18} />
           </div>
         )}
@@ -2717,22 +2733,22 @@ function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow, communityReci
             <>
               <FormDivider />
               {Object.entries(dm).map(([method, d]) => (
-                <div key={method} style={{ background:'rgba(122,154,176,0.10)', border:'0.5px solid rgba(122,154,176,0.35)',
+                <div key={method} style={{ background:'rgba(92,61,40,0.07)', border:'0.5px solid rgba(92,61,40,0.30)',
                   borderRadius:12, padding:'12px 13px', marginBottom:14 }}>
-                  <div style={{ fontSize:8, color:P.brew, fontFamily:'DM Mono, monospace', letterSpacing:'0.1em', marginBottom:8 }}>★ DIALED IN · {method.toUpperCase()}</div>
+                  <div style={{ fontSize:8, color:P.brew, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.1em', marginBottom:8 }}>★ DIALED IN · {method.toUpperCase()}</div>
                   <div style={{ display:'flex', flexWrap:'wrap', gap:'4px 14px', marginBottom:10 }}>
                     {[['Grind',d.grindSize],['Grinder',d.grinder],['Machine',d.machine],
                       ['Dose',d.dose],['Water',d.water],['Temp',d.temp],
                       ['Time',d.brewTime],['Ratio',d.ratio]].filter(([,v])=>v).map(([l,v])=>(
                       <div key={l}>
-                        <span style={{ fontSize:7.5, color:G.label, fontFamily:'DM Mono, monospace', textTransform:'uppercase', letterSpacing:'0.08em' }}>{l} </span>
-                        <span style={{ fontSize:11, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>{v}</span>
+                        <span style={{ fontSize:7.5, color:G.label, fontFamily:'IBM Plex Mono, monospace', textTransform:'uppercase', letterSpacing:'0.08em' }}>{l} </span>
+                        <span style={{ fontSize:11, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>{v}</span>
                       </div>
                     ))}
                   </div>
                   <div onClick={()=>onBrewNow && onBrewNow({ ...d, method, beanName:bean.name, roaster:bean.roaster||'' })}
                     style={{ background:P.brew, borderRadius:9, padding:'10px', textAlign:'center', cursor:'pointer' }}>
-                    <span style={{ fontSize:11, color:'#182635', fontFamily:'DM Mono, monospace' }}>▶ brew now</span>
+                    <span style={{ fontSize:11, color:'#fff', fontFamily:'IBM Plex Mono, monospace' }}>▶ brew now</span>
                   </div>
                 </div>
               ))}
@@ -2742,18 +2758,18 @@ function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow, communityReci
         {commRecipes.length>0 && (
           <>
             <FormDivider />
-            <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Community Recipes</div>
+            <div style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Community Recipes</div>
             {commRecipes.map((r,i)=>(
               <div key={i} style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+                  <div style={{ fontSize:10, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>
                     {[r.method, r.grindSize && `grind ${r.grindSize}`, r.ratio, r.brewTime].filter(Boolean).join(' · ')}
                   </div>
-                  {r.grinder && <div style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'DM Mono, monospace', fontWeight:300, marginTop:1 }}>{r.grinder}</div>}
+                  {r.grinder && <div style={{ fontSize:8.5, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:1 }}>{r.grinder}</div>}
                 </div>
                 <div onClick={()=>onBrewNow && onBrewNow({ ...r, beanName:bean.name, roaster:bean.roaster||r.roaster||'' })}
                   style={{ border:'1px solid '+P.brew, borderRadius:8, padding:'5px 12px', cursor:'pointer', flexShrink:0 }}>
-                  <span style={{ fontSize:9, color:P.brew, fontFamily:'DM Mono, monospace' }}>▶ brew</span>
+                  <span style={{ fontSize:9, color:P.brew, fontFamily:'IBM Plex Mono, monospace' }}>▶ brew</span>
                 </div>
               </div>
             ))}
@@ -2762,15 +2778,15 @@ function BeanDetail({ bean, onBack, onEdit, entries=[], onBrewNow, communityReci
         {attempts.length>0 && (
           <>
             <FormDivider />
-            <div style={{ fontSize:9, color:G.label, fontFamily:'DM Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Recent Brews</div>
+            <div style={{ fontSize:9, color:G.label, fontFamily:'IBM Plex Mono, monospace', marginBottom:8, letterSpacing:'0.1em', textTransform:'uppercase' }}>Recent Brews</div>
             {attempts.slice(0,3).map(a=>(
               <div key={a.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-                <span style={{ fontSize:10, color:G.text, fontFamily:'DM Mono, monospace', fontWeight:300 }}>
+                <span style={{ fontSize:10, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300 }}>
                   {[a.method, a.grindSize && `grind ${a.grindSize}`, a.brewTime].filter(Boolean).join(' · ') || '—'}
                 </span>
                 <span style={{ display:'flex', alignItems:'center', gap:8 }}>
                   {a.rating>0 && <RatingDots n={a.rating} />}
-                  <span style={{ fontSize:9, color:P.headerMuted, fontFamily:'DM Mono, monospace' }}>{formatDate(a.date)}</span>
+                  <span style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace' }}>{formatDate(a.date)}</span>
                 </span>
               </div>
             ))}
