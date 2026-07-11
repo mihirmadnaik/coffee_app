@@ -18,6 +18,9 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { width: 100%; height: 100%; overflow: hidden; }
+    /* Paint html itself paper too, so the iOS bottom safe-area (home-indicator)
+       region blends instead of showing a default white strip. */
+    html { background: #FBFAF8; }
     body {
       background: #FBFAF8;
       font-family: 'Hanken Grotesk', sans-serif;
@@ -25,7 +28,7 @@
       -webkit-touch-callout: none;
     }
     #root { display: flex; flex-direction: column; }
-    .scroll-y { overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+    .scroll-y { overflow-y: auto; -webkit-overflow-scrolling: touch; }
     .scroll-y::-webkit-scrollbar { display: none; }
     .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .scroll-x::-webkit-scrollbar { display: none; }
@@ -863,32 +866,23 @@ function Shell({ activeTab, onBeans, onStats, onCafe, onBrew, children }) {
   const st = useRef({ down:false });
   const armedRef = useRef(false);
   armedRef.current = armed;
-  const THRESH = 30, TAP = 6, MAXDRAG = 150, DECIDE = 14;
+  const THRESH = 30, TAP = 6, MAXDRAG = 150;
 
-  // Shared gesture. mode 'cup' arms immediately (so a press reveals the split and
-  // a tap toggles it); mode 'screen' only engages once a horizontal drag is clearly
-  // intended, leaving vertical scrolls and plain taps to behave normally.
-  const begin = (e, mode) => {
+  // The choice gesture originates ONLY on the cup: pressing it reveals the split
+  // and arms immediately; the finger then drags freely in both axes (X at release
+  // decides the side). A plain tap toggles the split so the labels can be tapped.
+  const begin = e => {
     const wasArmed = armedRef.current;
-    st.current = { down:true, startX:e.clientX, startY:e.clientY, moved:0, side:null,
-      axis: mode==='cup' ? 'h' : null, mode };
-    if (mode==='cup') { setArmed(true); setDragSide(null); setDragX(0); setDragY(0); }
+    st.current = { down:true, startX:e.clientX, startY:e.clientY, moved:0, side:null };
+    setArmed(true); setDragSide(null); setDragX(0); setDragY(0);
     const move = ev => {
       const s = st.current; if (!s.down) return;
       const dx = ev.clientX - s.startX, dy = ev.clientY - s.startY;
-      if (!s.axis) {                                   // decide scroll vs. swipe once
-        if (Math.abs(dx) < DECIDE && Math.abs(dy) < DECIDE) return;
-        if (Math.abs(dx) > Math.abs(dy)) { s.axis = 'h'; setArmed(true); }
-        else { s.axis = 'v'; return; }                 // vertical → let it scroll
-      }
-      if (s.axis !== 'h') return;
-      s.moved = Math.max(s.moved, Math.abs(dx));
-      // side is decided by horizontal position only; the cup itself follows the
-      // finger on both axes so it can be dragged up/down freely.
+      s.moved = Math.max(s.moved, Math.hypot(dx, dy));
       const side = dx <= -THRESH ? 'cafe' : dx >= THRESH ? 'brew' : null;
       s.side = side; setDragSide(side);
-      setDragX(Math.max(-MAXDRAG, Math.min(MAXDRAG, dx)));
-      setDragY(Math.max(-680, Math.min(80, dy)));
+      setDragX(Math.max(-MAXDRAG, Math.min(MAXDRAG, dx)));   // cup follows the finger…
+      setDragY(Math.max(-680, Math.min(80, dy)));            // …on both axes
     };
     const up = () => {
       const s = st.current; s.down = false;
@@ -896,22 +890,20 @@ function Shell({ activeTab, onBeans, onStats, onCafe, onBrew, children }) {
       document.removeEventListener('pointerup', up);
       document.removeEventListener('pointercancel', up);
       setDragX(0); setDragY(0); setDragSide(null);
-      if (s.axis === 'h' && s.side) { setArmed(false); (s.side==='cafe' ? onCafe : onBrew)(); }
-      else if (s.mode === 'cup' && s.axis !== 'v' && s.moved < TAP) setArmed(!wasArmed); // cup tap toggles
-      else setArmed(false);
+      if (s.side) { setArmed(false); (s.side==='cafe' ? onCafe : onBrew)(); }
+      else if (s.moved < TAP) setArmed(!wasArmed);   // tap toggles the split
+      else setArmed(false);                          // dragged but centered → cancel
     };
     document.addEventListener('pointermove', move);
     document.addEventListener('pointerup', up);
     document.addEventListener('pointercancel', up);
   };
-  const onCupDown    = e => { e.stopPropagation(); begin(e, 'cup'); };
-  const onScreenDown = e => begin(e, 'screen');
+  const onCupDown = e => { e.stopPropagation(); begin(e); };
   const cancel = () => { setArmed(false); setDragSide(null); setDragX(0); setDragY(0); };
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}>
-      <div onPointerDown={onScreenDown} style={{ flex:1, display:'flex', flexDirection:'column',
-        overflow:'hidden', touchAction:'pan-y',
+      <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden',
         filter: armed ? 'blur(7px) saturate(0.92)' : 'none',
         transform: armed ? 'scale(1.02)' : 'none',
         transition:'filter 0.18s ease, transform 0.18s ease' }}>
