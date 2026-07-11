@@ -844,9 +844,9 @@ function CupBar({ activeTab, onBeans, onStats }) {
     </div>
   );
   return (
-    <div style={{ position:'absolute', left:0, right:0, bottom:0, height:112, zIndex:8,
+    <div style={{ position:'absolute', left:0, right:0, bottom:0, height:104, zIndex:8,
       display:'flex', alignItems:'flex-end', justifyContent:'space-between',
-      padding:'0 42px 12px', paddingBottom:'calc(12px + env(safe-area-inset-bottom))',
+      padding:'0 42px', paddingBottom:'calc(10px + env(safe-area-inset-bottom) * 0.35)',
       pointerEvents:'none',
       background:'linear-gradient(to bottom, rgba(251,250,248,0) 0%, rgba(251,250,248,0.55) 42%, rgba(251,250,248,0.9) 72%, #FBFAF8 100%)',
       backdropFilter:'blur(6px)', WebkitBackdropFilter:'blur(6px)',
@@ -910,12 +910,18 @@ function Shell({ activeTab, onBeans, onStats, onCafe, onBrew, children }) {
         {children}
       </div>
 
-      <CupBar activeTab={activeTab} onBeans={onBeans} onStats={onStats} />
+      {/* Hide the bar while the split is armed — otherwise its opaque frosted
+          bottom shows through the translucent overlay as a washed-out strip. */}
+      <div style={{ opacity: armed ? 0 : 1, pointerEvents: armed ? 'none' : 'auto',
+        transition:'opacity 0.16s ease' }}>
+        <CupBar activeTab={activeTab} onBeans={onBeans} onStats={onStats} />
+      </div>
 
       {armed && <SplitOverlay dragSide={dragSide}
         onCafe={()=>{ cancel(); onCafe(); }} onBrew={()=>{ cancel(); onBrew(); }} onCancel={cancel} />}
 
-      <div onPointerDown={onCupDown} style={{ position:'absolute', left:'50%', bottom:16,
+      <div onPointerDown={onCupDown} style={{ position:'absolute', left:'50%',
+        bottom:'calc(6px + env(safe-area-inset-bottom) * 0.35)',
         transform:`translate(calc(-50% + ${dragX}px), ${dragY}px)`, width:64, height:64, borderRadius:'50%',
         background:P.acc, display:'flex', alignItems:'center', justifyContent:'center',
         zIndex:15, cursor:'pointer', touchAction:'none',
