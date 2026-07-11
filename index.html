@@ -739,40 +739,6 @@ function NavBar({ title, onBack, onSave }) {
   );
 }
 
-function TabBar({ active, onTab, onAdd }) {
-  const tabs = [{label:'HOME',i:0},{label:'BEANS',i:1},null,{label:'STATS',i:3},{label:'PROFILE',i:4}];
-  return (
-    <div style={{ height:58, background:P.bg, borderTop:'1px solid '+P.line,
-      display:'flex', alignItems:'center', flexShrink:0, padding:'0 8px',
-      paddingBottom:'env(safe-area-inset-bottom)' }}>
-      {tabs.map((tab,i) => {
-        if (!tab) return (
-          <div key={i} style={{ flex:1, display:'flex', justifyContent:'center' }}>
-            <div onClick={onAdd} style={{ width:46, height:46, borderRadius:'50%', background:P.acc,
-              boxShadow:P.shadowBtn,
-              display:'flex', alignItems:'center', justifyContent:'center',
-              marginBottom:14, cursor:'pointer' }}>
-              <div style={{ fontSize:24, color:'#fff', lineHeight:1, fontWeight:300, marginTop:-2 }}>+</div>
-            </div>
-          </div>
-        );
-        const on = tab.i === active;
-        return (
-          <div key={i} onClick={() => onTab(tab.i)} style={{ flex:1, display:'flex',
-            flexDirection:'column', alignItems:'center', justifyContent:'center',
-            gap:4, paddingTop:4, cursor:'pointer' }}>
-            <div style={{ width:6, height:6, borderRadius:'50%',
-              background: on ? P.acc : P.headerMuted, opacity: on?1:0.35 }} />
-            <span style={{ fontSize:8, color: on?P.acc:P.headerMuted,
-              fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em',
-              textTransform:'uppercase', fontWeight: on?500:400 }}>{tab.label}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Cup navigation ───────────────────────────────────────────────────────────
 // Replaces the tab bar + "+" FAB. A centered coffee-cup button drives a
 // press-drag-release gesture: press → home blurs + a two-tone split reveals;
@@ -1267,7 +1233,7 @@ function MapView({ entries, onLogCafe }) {
 }
 
 // ── Home Screen ───────────────────────────────────────────────────────────────
-function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgain, onStartTimer }) {
+function HomeScreen({ entries, onMenu, onEntryPress, onLogCafe, onBrewAgain, onStartTimer }) {
   const [calOpen, setCalOpen] = useState(false);
   const [filterDay, setFilterDay] = useState(null);
   const [mapMode, setMapMode] = useState(false);
@@ -1278,8 +1244,19 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgai
   const showBrewAgain = !!lastBrew;
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
-      <div style={{ padding:'10px 16px 12px', background:P.bg,
-        paddingTop:'calc(10px + env(safe-area-inset-top))',
+      {/* top bar: hamburger + wordmark */}
+      <div style={{ display:'flex', alignItems:'center', gap:14, padding:'8px 20px 4px',
+        paddingTop:'calc(8px + env(safe-area-inset-top))', background:P.bg }}>
+        <div onClick={onMenu} style={{ width:22, display:'flex', flexDirection:'column', gap:5, cursor:'pointer', padding:'4px 0' }}>
+          <span style={{ height:2.5, background:P.headerText, borderRadius:2 }} />
+          <span style={{ height:2.5, background:P.headerText, borderRadius:2 }} />
+          <span style={{ height:2.5, width:'65%', background:P.headerText, borderRadius:2 }} />
+        </div>
+        <div style={{ fontSize:13, fontWeight:600, letterSpacing:'0.02em', color:P.headerText }}>
+          Coffee <span style={{ color:P.acc }}>Diary</span>
+        </div>
+      </div>
+      <div style={{ padding:'6px 16px 12px', background:P.bg,
         display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
         <div>
           <div style={{ fontSize:26, fontWeight:700, letterSpacing:'-0.02em',
@@ -1417,8 +1394,6 @@ function HomeScreen({ entries, onTab, onAdd, onEntryPress, onLogCafe, onBrewAgai
           <div style={{ height:16 }} />
         </div>
       )}
-
-      <TabBar active={0} onTab={onTab} onAdd={onAdd} />
     </div>
   );
 }
@@ -1733,97 +1708,6 @@ const GEAR_CATALOG = [
   { c:'scale', n:'Timemore Black Mirror' },
   { c:'scale', n:'Hario Drip Scale' },
 ];
-
-function QuickCaptureSheet({ onClose, onSave, onExpand, beans=[], gear=[] }) {
-  const [type, setType]         = useState('cafe');
-  const [cafeName, setCafeName] = useState('');
-  const [drinkType, setDrink]   = useState('');
-  const [beanName, setBean]     = useState('');
-  const [method, setMethod]     = useState('');
-  const [rating, setRating]     = useState(0);
-  const ownedMethods = [...new Set(gear.flatMap(g => g.m||[]))];
-  const [showAllMethods, setShowAllMethods] = useState(ownedMethods.length===0);
-  const methodChips = [...new Set([
-    ...ownedMethods,
-    ...(showAllMethods ? BREW_METHODS : []),
-    ...(method ? [method] : []) ])];
-
-  const handleSave = () => {
-    const base = { id:genId(), date:new Date().toISOString(), type, rating, tastingNotes:[], notes:'' };
-    const entry = type==='cafe'
-      ? { ...base, cafeName, drinkType, location:'', bean:'', price:'',
-          ratings:{overall:rating,aroma:0,taste:0,texture:0}, vibeTags:[], wouldVisitAgain:false }
-      : { ...base, beanName, method, roaster:'', grinder:'', machine:'', dose:'', water:'', temp:'',
-          brewTime:'', grindSize:'', ratio:'', whatIdChange:'', recipe:'',
-          bloomWater:'', bloomTime:'', pours:'', steepTime:'', secondSteep:'', preInfusion:'', pressure:'', basket:'' };
-    onSave(entry);
-  };
-
-  const fieldStyle = { height:42, background:G.surface, border:'1px solid '+G.border,
-    borderRadius:10, display:'flex', alignItems:'center', padding:'0 14px' };
-  const labelStyle = { fontSize:8.5, color:P.cardMuted, fontFamily:'IBM Plex Mono, monospace',
-    marginBottom:5, letterSpacing:'0.1em', textTransform:'uppercase' };
-
-  return (
-    <div style={{ position:'fixed', inset:0, zIndex:100, display:'flex', flexDirection:'column', justifyContent:'flex-end' }}>
-      <div className="fade-in" onClick={onClose}
-        style={{ position:'absolute', inset:0, background:'rgba(40,30,20,0.35)' }} />
-      <div className="slide-up" style={{ position:'relative', zIndex:1,
-        background:'rgba(251,250,248,0.98)', borderRadius:'20px 20px 0 0',
-        border:'0.5px solid '+P.cardStroke, borderBottom:'none',
-        padding:'0 16px', paddingBottom:'env(safe-area-inset-bottom)' }}>
-        <div style={{ width:36, height:3, background:P.cardStroke, borderRadius:3, margin:'10px auto 14px' }} />
-        <div style={{ display:'flex', gap:8, marginBottom:16 }}>
-          {[['cafe','Café Visit'],['brew','Home Brew']].map(([val,lbl])=>(
-            <div key={val} onClick={()=>setType(val)} style={{ padding:'7px 16px', borderRadius:20,
-              fontSize:11.5, cursor:'pointer', fontWeight:600,
-              background: type===val ? (val==='cafe'?P.cafe:P.brew) : 'transparent',
-              color: type===val ? '#fff' : P.cardMuted,
-              border:'1px solid '+(type===val ? (val==='cafe'?P.cafe:P.brew) : P.cardStroke),
-              transition:'all 0.15s' }}>
-              {lbl}
-            </div>
-          ))}
-        </div>
-        {type==='cafe' ? (
-          <>
-            <div style={{ marginBottom:10 }}>
-              <div style={labelStyle}>Café Name</div>
-              <div style={fieldStyle}><input placeholder="Where did you go?" value={cafeName} onChange={e=>setCafeName(e.target.value)} style={{ fontSize:13, color:G.text }} /></div>
-            </div>
-            <div style={{ marginBottom:10 }}>
-              <div style={labelStyle}>Drink</div>
-              <div style={fieldStyle}><input placeholder="Flat White, Latte…" value={drinkType} onChange={e=>setDrink(e.target.value)} style={{ fontSize:13, color:G.text }} /></div>
-            </div>
-          </>
-        ) : (
-          <>
-            <BeanPicker beans={beans} value={beanName} onChange={setBean} />
-            <div style={{ marginBottom:10 }}>
-              <div style={labelStyle}>Method</div>
-              <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
-                {methodChips.map(m=><GhostChip key={m} label={m} active={method===m} onPress={()=>setMethod(method===m?'':m)} />)}
-                {!showAllMethods && <GhostChip label="+ more" onPress={()=>setShowAllMethods(true)} />}
-              </div>
-            </div>
-          </>
-        )}
-        <div style={{ marginBottom:14 }}>
-          <div style={labelStyle}>Quick Rating</div>
-          <RatingSquares n={rating} size={20} onChange={setRating} />
-        </div>
-        <div onClick={()=>onExpand(type,{cafeName,drinkType,beanName,method,rating})}
-          style={{ textAlign:'center', padding:'8px 0', borderTop:'1px solid '+P.line, marginBottom:10, cursor:'pointer' }}>
-          <span style={{ fontSize:11, color:P.acc, fontWeight:600 }}>+ add more details</span>
-        </div>
-        <div onClick={handleSave} style={{ background: type==='cafe'?P.cafe:P.brew, borderRadius:15, padding:'14px',
-          textAlign:'center', marginBottom:12, cursor:'pointer', boxShadow:P.shadowBtn }}>
-          <span style={{ color:'#fff', fontSize:15, fontWeight:600 }}>Save entry</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Café Full Form ────────────────────────────────────────────────────────────
 function CafeForm({ initial={}, onBack, onSave, onUpdate, customNotes=[], onAddNote=()=>{}, customDrinks=[], onAddDrink=()=>{} }) {
@@ -2441,7 +2325,7 @@ function AddBeanForm({ initial={}, onBack, onSave, onUpdate, communityBeans=[], 
   );
 }
 
-function BeanLibrary({ beans, onTab, onAdd, onAddBean, onBeanPress }) {
+function BeanLibrary({ beans, onAddBean, onBeanPress }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const filtered = beans.filter(b => {
@@ -2496,13 +2380,12 @@ function BeanLibrary({ beans, onTab, onAdd, onAddBean, onBeanPress }) {
         </div>
         <div style={{ height:16 }} />
       </div>
-      <TabBar active={1} onTab={onTab} onAdd={onAdd} />
     </div>
   );
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
-function StatsDash({ entries, onTab, onAdd }) {
+function StatsDash({ entries }) {
   const [period, setPeriod] = useState('month');
   const now = new Date();
   const subset = period==='month'
@@ -2625,7 +2508,6 @@ function StatsDash({ entries, onTab, onAdd }) {
         )}
         <div style={{ height:16 }} />
       </div>
-      <TabBar active={3} onTab={onTab} onAdd={onAdd} />
     </div>
   );
 }
@@ -2867,22 +2749,45 @@ function AccountCard({ session, syncState, lastSyncAt, onSync }) {
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, onGearRemove, gearCatalog=GEAR_CATALOG, session, syncState, lastSyncAt, onSync, onExport, onImport, timerMode='staged', onTimerModeChange=()=>{} }) {
+function ProfileScreen({ entries, beans, onBack, focusSection, gear=[], onGearChange, onGearRemove, gearCatalog=GEAR_CATALOG, session, syncState, lastSyncAt, onSync, onExport, onImport, timerMode='staged', onTimerModeChange=()=>{} }) {
   const importRef = useRef(null);
+  const scrollRef = useRef(null);
+  const secRefs = { identity:useRef(null), gear:useRef(null), community:useRef(null), settings:useRef(null) };
   const total = entries.length;
   const cafe  = entries.filter(e=>e.type==='cafe').length;
   const brew  = entries.filter(e=>e.type==='brew').length;
+  // Drawer items deep-link to a section; scroll it into view on mount.
+  useEffect(() => {
+    const el = focusSection && secRefs[focusSection] && secRefs[focusSection].current;
+    if (el && scrollRef.current) {
+      const top = el.offsetTop - 10;
+      scrollRef.current.scrollTo({ top: Math.max(0, top), behavior:'auto' });
+    }
+  }, [focusSection]);
+  const secHead = { fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 };
   return (
-    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
-      <div style={{ padding:'24px 16px 16px', paddingTop:'calc(24px + env(safe-area-inset-top))',
-        display:'flex', flexDirection:'column', alignItems:'center' }}>
-        <div style={{ width:72, height:72, borderRadius:'50%', background:P.cardBg2,
-          border:'0.5px solid '+P.cardStroke, display:'flex', alignItems:'center',
-          justifyContent:'center', marginBottom:12, fontSize:32 }}>☕</div>
-        <div style={{ fontSize:20, fontWeight:500, color:P.headerText, fontFamily:'Hanken Grotesk, sans-serif' }}>Coffee Diary</div>
-        <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, marginTop:4 }}>Your personal coffee journal</div>
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', background:P.bg }}>
+      <div style={{ padding:'10px 20px 12px', paddingTop:'calc(10px + env(safe-area-inset-top))',
+        display:'flex', justifyContent:'space-between', alignItems:'center',
+        borderBottom:'1px solid '+P.line, background:P.bg, flexShrink:0 }}>
+        <div onClick={onBack} style={{ fontSize:13, color:P.headerMuted, cursor:'pointer', padding:'4px 0' }}>← Home</div>
+        <div style={{ fontSize:15, fontWeight:600, color:P.headerText }}>Profile</div>
+        <div style={{ width:44 }} />
       </div>
-      <div className="scroll-y" style={{ flex:1, padding:'0 16px' }}>
+      <div ref={scrollRef} className="scroll-y" style={{ flex:1, padding:'16px' }}>
+        <div ref={secRefs.identity} style={{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:16 }}>
+          <div style={{ width:64, height:64, borderRadius:'50%', color:'#fff',
+            background:'linear-gradient(135deg,#B0703A,#5A2E15)', display:'flex', alignItems:'center',
+            justifyContent:'center', marginBottom:10, fontSize:26, fontWeight:600 }}>
+            {(session && session.user && session.user.email ? session.user.email[0] : '☕').toUpperCase()}
+          </div>
+          <div style={{ fontSize:18, fontWeight:600, color:P.headerText }}>
+            {session && session.user && session.user.email
+              ? session.user.email.split('@')[0].replace(/^\w/, c=>c.toUpperCase())
+              : 'Coffee Diary'}
+          </div>
+          <div style={{ fontSize:10, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', marginTop:4 }}>Home barista · {total} cup{total!==1?'s':''}</div>
+        </div>
         <AccountCard session={session} syncState={syncState} lastSyncAt={lastSyncAt} onSync={onSync} />
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:16 }}>
           {[['Total',total],['Café',cafe],['Brews',brew]].map(([l,v])=>(
@@ -2893,22 +2798,25 @@ function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, on
             </div>
           ))}
         </div>
-        <GearLocker gear={gear} onChange={onGearChange} onRemove={onGearRemove} catalog={gearCatalog} />
+        <div ref={secRefs.gear}>
+          <GearLocker gear={gear} onChange={onGearChange} onRemove={onGearRemove} catalog={gearCatalog} />
+        </div>
         {(() => {
           let n = 0;
           try { n = JSON.parse(localStorage.getItem('share_queue')||'[]').length; } catch {}
-          if (!n) return null;
           return (
-            <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
-              <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6 }}>Community</div>
+            <div ref={secRefs.community} style={{ background:P.cardBg, border:'1px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
+              <div style={secHead}>Community</div>
               <div style={{ fontSize:10, color:G.text, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, lineHeight:1.6 }}>
-                {n} submission{n!==1?'s':''} queued — will sync automatically once community sharing goes live.
+                {n > 0
+                  ? `${n} submission${n!==1?'s':''} queued — will sync automatically once community sharing goes live.`
+                  : 'Share beans and dialed-in recipes to the community library from a bean or entry. Your submissions appear here.'}
               </div>
             </div>
           );
         })()}
-        <div style={{ background:P.cardBg, border:'0.5px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
-          <div style={{ fontSize:8, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:8 }}>Brew Timer</div>
+        <div ref={secRefs.settings} style={{ background:P.cardBg, border:'1px solid '+P.cardStroke, borderRadius:14, padding:'12px 14px', marginBottom:8 }}>
+          <div style={secHead}>Brew Timer</div>
           <div style={{ fontSize:9, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', fontWeight:300, lineHeight:1.6, marginBottom:10 }}>
             {timerMode==='staged'
               ? 'Guided: each stage is its own countdown that chimes when done; manual steps wait for a tap.'
@@ -2949,7 +2857,6 @@ function ProfileScreen({ entries, beans, onTab, onAdd, gear=[], onGearChange, on
         </div>
         <div style={{ height:16 }} />
       </div>
-      <TabBar active={4} onTab={onTab} onAdd={onAdd} />
     </div>
   );
 }
@@ -3443,15 +3350,20 @@ function App() {
   const gearCatalog = [...GEAR_CATALOG, ...community.gear.filter(g =>
     g && g.n && !GEAR_CATALOG.some(c => c.n.toLowerCase()===g.n.toLowerCase()))];
   const [view,    setView]          = useState('home');
-  const [showSheet, setSheet]       = useState(false);
+  const [drawerOpen, setDrawer]     = useState(false);
+  const [profileSection, setProfileSection] = useState(null);
   const [formInit,  setInit]        = useState({});
   const [selectedEntry, setSelEntry]= useState(null);
   const [selectedBean,  setSelBean] = useState(null);
   const [timerRecipe,   setTimerRecipe] = useState(null);
 
-  const goTab = t => { setSheet(false); setView(['home','beans',null,'stats','profile'][t]); };
+  // cup-nav destinations
+  const goHome   = () => setView('home');
+  const openCafe = () => { setInit({}); setView('cafe-form'); };
+  const openBrew = () => { setInit({}); setView('brew-form'); };
+  const openDrawerItem = section => { setDrawer(false); setProfileSection(section); setView('profile'); };
 
-  const saveEntry = entry => { setEntries([entry,...entries]); setSheet(false); setView('home'); };
+  const saveEntry = entry => { setEntries([entry,...entries]); setView('home'); };
 
   const updateEntry = entry => {
     setEntries(prev => prev.map(e => e.id===entry.id ? entry : e));
@@ -3464,8 +3376,6 @@ function App() {
     setSelBean(bean);
     setView('bean-detail');
   };
-
-  const expand = (type, partial) => { setInit(partial); setSheet(false); setView(type==='cafe'?'cafe-form':'brew-form'); };
 
   const brewAgain  = src => saveEntry({ ...src, id:genId(), date:new Date().toISOString() });
 
@@ -3505,14 +3415,20 @@ function App() {
       dialedByMethod:{ ...(dialedMap(b)||{}), [entry.method||'Brew']: snap } };
   }));
 
-  const sp = { onTab:goTab, onAdd:()=>setSheet(true) };
+  const cupNav = { onCafe:openCafe, onBrew:openBrew };
 
   return (
-    <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background:P.bg }}>
-      {view==='home'         && <HomeScreen    entries={entries} {...sp} onEntryPress={e=>{ setSelEntry(e); setView('entry-detail'); }} onLogCafe={p=>{ setInit(p); setView('cafe-form'); }} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
-      {view==='beans'        && <BeanLibrary   beans={beans} {...sp} onAddBean={()=>setView('add-bean')} onBeanPress={b=>{ setSelBean(b); setView('bean-detail'); }} />}
-      {view==='stats'        && <StatsDash     entries={entries} {...sp} />}
-      {view==='profile'      && <ProfileScreen entries={entries} beans={beans} {...sp} gear={gear} onGearChange={setGear} onGearRemove={removeGear} gearCatalog={gearCatalog} session={session} syncState={syncState} lastSyncAt={lastSyncAt} onSync={doSync} onExport={exportData} onImport={importData} timerMode={timerMode} onTimerModeChange={setTimerMode} />}
+    <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background:P.bg, position:'relative' }}>
+      {view==='home'  && <Shell activeTab="home"  onBeans={()=>setView('beans')} onStats={()=>setView('stats')} {...cupNav}>
+        <HomeScreen  entries={entries} onMenu={()=>setDrawer(true)} onEntryPress={e=>{ setSelEntry(e); setView('entry-detail'); }} onLogCafe={p=>{ setInit(p); setView('cafe-form'); }} onBrewAgain={brewAgain} onStartTimer={startTimer} />
+      </Shell>}
+      {view==='beans' && <Shell activeTab="beans" onBeans={goHome} onStats={()=>setView('stats')} {...cupNav}>
+        <BeanLibrary beans={beans} onAddBean={()=>setView('add-bean')} onBeanPress={b=>{ setSelBean(b); setView('bean-detail'); }} />
+      </Shell>}
+      {view==='stats' && <Shell activeTab="stats" onBeans={()=>setView('beans')} onStats={goHome} {...cupNav}>
+        <StatsDash   entries={entries} />
+      </Shell>}
+      {view==='profile'      && <ProfileScreen entries={entries} beans={beans} onBack={goHome} focusSection={profileSection} gear={gear} onGearChange={setGear} onGearRemove={removeGear} gearCatalog={gearCatalog} session={session} syncState={syncState} lastSyncAt={lastSyncAt} onSync={doSync} onExport={exportData} onImport={importData} timerMode={timerMode} onTimerModeChange={setTimerMode} />}
       {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} beans={beans} onPinDialed={pinDialed} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
       {view==='bean-detail'  && selectedBean  && <BeanDetail  bean={selectedBean}  onBack={()=>setView('beans')} onEdit={()=>{ setInit(selectedBean); setView('bean-form-edit'); }} entries={entries} onBrewNow={startTimer} communityRecipes={community.recipes} />}
       {view==='brew-timer'   && timerRecipe   && <TimerScreen recipe={timerRecipe} onCancel={()=>setView('home')} onLog={saveEntry} mode={timerMode} />}
@@ -3522,7 +3438,7 @@ function App() {
       {view==='brew-form-edit'&& <BrewForm initial={formInit} onBack={()=>setView('entry-detail')} onUpdate={updateEntry} beans={beans} entries={entries} gear={gear} customNotes={customNotes} onAddNote={setCustomNotes} />}
       {view==='add-bean'     && <AddBeanForm onBack={()=>setView('beans')} onSave={b=>{ setBeans([b,...beans]); setView('beans'); }} communityBeans={community.beans} vocab={community.vocab} customNotes={customNotes} onAddNote={setCustomNotes} customProcesses={customProcesses} onAddProcess={setCustomProcesses} session={session} />}
       {view==='bean-form-edit'&& <AddBeanForm initial={formInit} onBack={()=>setView('bean-detail')} onUpdate={updateBean} vocab={community.vocab} customNotes={customNotes} onAddNote={setCustomNotes} customProcesses={customProcesses} onAddProcess={setCustomProcesses} />}
-      {showSheet && <QuickCaptureSheet onClose={()=>setSheet(false)} onSave={saveEntry} onExpand={expand} beans={beans} gear={gear} />}
+      <Drawer open={drawerOpen} onClose={()=>setDrawer(false)} onItem={openDrawerItem} session={session} entries={entries} />
     </div>
   );
 }
