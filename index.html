@@ -40,6 +40,10 @@
       to   { transform: translateY(0);    opacity: 1; }
     }
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideInLeft {
+      from { transform: translateX(-100%); }
+      to   { transform: translateX(0); }
+    }
     @keyframes stageFlash {
       0% { background: rgba(176,124,63,0); }
       35% { background: rgba(176,124,63,0.35); }
@@ -765,6 +769,227 @@ function TabBar({ active, onTab, onAdd }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── Cup navigation ───────────────────────────────────────────────────────────
+// Replaces the tab bar + "+" FAB. A centered coffee-cup button drives a
+// press-drag-release gesture: press → home blurs + a two-tone split reveals;
+// drag left arms "Café visit", drag right arms "Home brew"; release opens that
+// form. A plain tap keeps the split open so the labels can be tapped instead.
+
+function CupIcon({ size=28 }) {
+  const s = size/28;
+  return (
+    <div style={{ width:28*s, height:24*s, position:'relative', color:'#fff' }}>
+      <div style={{ position:'absolute', left:0, top:5*s, width:22*s, height:17*s,
+        border:'2.6px solid currentColor', borderRadius:'2px 2px 8px 8px' }} />
+      <div style={{ position:'absolute', right:0, top:8*s, width:8*s, height:10*s,
+        border:'2.6px solid currentColor', borderLeft:'none', borderRadius:'0 7px 7px 0' }} />
+      <div style={{ position:'absolute', left:7*s, top:-4*s, width:2.4*s, height:6*s,
+        background:'currentColor', borderRadius:2, opacity:0.9 }} />
+      <div style={{ position:'absolute', left:14*s, top:-3*s, width:2.4*s, height:5*s,
+        background:'currentColor', borderRadius:2, opacity:0.9 }} />
+    </div>
+  );
+}
+
+// Small bottom-bar destination glyphs (match the storyboard's outline marks).
+function BeansGlyph({ active }) {
+  const c = active ? P.acc : P.headerMuted;
+  return <div style={{ width:24, height:24, border:'2px solid '+c, borderRadius:7 }} />;
+}
+function StatsGlyph({ active }) {
+  const c = active ? P.acc : P.headerMuted;
+  return (
+    <div style={{ width:24, height:24, position:'relative' }}>
+      <div style={{ position:'absolute', bottom:0, left:3, width:6, height:15, background:c, borderRadius:1 }} />
+      <div style={{ position:'absolute', bottom:0, left:13, width:6, height:24, background:c, borderRadius:1 }} />
+    </div>
+  );
+}
+
+// One side of the split — a disc + icon that fills accent when armed.
+function ChoiceDisc({ armed, kind }) {
+  return (
+    <div style={{ width:52, height:52, borderRadius:'50%', margin:'0 auto',
+      background: armed ? P.acc : '#fff', boxShadow:'0 8px 18px -6px rgba(40,30,20,0.3)',
+      display:'flex', alignItems:'center', justifyContent:'center',
+      transform: armed ? 'scale(1.12)' : 'none', transition:'all 0.15s' }}>
+      <div style={{ width:22, height:22, border:'2.2px solid '+(armed ? '#fff' : P.acc),
+        borderRadius: kind==='cafe' ? '50%' : '2px 2px 7px 7px' }} />
+    </div>
+  );
+}
+
+function SplitOverlay({ dragSide, onCafe, onBrew, onCancel }) {
+  const armedL = dragSide==='cafe', armedR = dragSide==='brew';
+  const side = { position:'absolute', top:'40%', transform:'translateY(-50%)', width:'46%',
+    textAlign:'center', zIndex:12, cursor:'pointer' };
+  const lab = armed => ({ fontSize:21, fontWeight:500, color: armed ? P.acc : '#3a271a',
+    letterSpacing:'-0.01em', lineHeight:1.18, marginTop:10, textShadow:'0 1px 10px rgba(251,250,248,0.6)' });
+  const sub = { fontSize:10, letterSpacing:'0.14em', textTransform:'uppercase', color:'#8a6a4f',
+    marginTop:9, fontWeight:600 };
+  return (
+    <div style={{ position:'absolute', inset:0, zIndex:10 }} className="fade-in">
+      <div style={{ position:'absolute', top:0, bottom:0, left:0, width:'50%',
+        background:'linear-gradient(180deg, rgba(214,201,178,0.5), rgba(198,181,150,0.62))' }} />
+      <div style={{ position:'absolute', top:0, bottom:0, right:0, width:'50%',
+        background:'linear-gradient(180deg, rgba(224,196,170,0.5), rgba(214,169,134,0.62))' }} />
+      <div style={{ position:'absolute', inset:0, background:'rgba(251,250,248,0.28)' }} />
+      <div style={{ position:'absolute', left:'50%', top:'10%', bottom:'16%', width:1,
+        background:'rgba(92,61,40,0.22)', transform:'translateX(-0.5px)' }} />
+      {/* tap anywhere else cancels */}
+      <div onClick={onCancel} style={{ position:'absolute', inset:0 }} />
+      <div onClick={onCafe} style={{ ...side, left:0, opacity: armedR ? 0.4 : 1, transition:'opacity 0.15s' }}>
+        <div style={{ fontSize:26, color:P.acc, marginBottom:8 }}>←</div>
+        <ChoiceDisc armed={armedL} kind="cafe" />
+        <div style={lab(armedL)}>Café<br/>visit</div>
+        <div style={sub}>{armedL ? 'release to open' : '← swipe'}</div>
+      </div>
+      <div onClick={onBrew} style={{ ...side, right:0, opacity: armedL ? 0.4 : 1, transition:'opacity 0.15s' }}>
+        <div style={{ fontSize:26, color:P.acc, marginBottom:8 }}>→</div>
+        <ChoiceDisc armed={armedR} kind="brew" />
+        <div style={lab(armedR)}>Home<br/>brew</div>
+        <div style={sub}>{armedR ? 'release to open' : 'swipe →'}</div>
+      </div>
+      <div style={{ position:'absolute', left:0, right:0, bottom:104, textAlign:'center',
+        fontSize:11, color:P.headerMuted, fontFamily:'IBM Plex Mono, monospace', letterSpacing:'0.04em', zIndex:12 }}>
+        {dragSide ? 'let go to open ✓' : 'hold & swipe · or tap a side'}
+      </div>
+    </div>
+  );
+}
+
+// Bottom bar: Beans (left) + Stats (right). The cup FAB floats in the gap,
+// rendered by Shell so it can sit above the overlay.
+function CupBar({ activeTab, onBeans, onStats }) {
+  const item = (label, active, onClick, glyph) => (
+    <div onClick={onClick} style={{ display:'flex', flexDirection:'column', alignItems:'center',
+      gap:5, color: active ? P.acc : P.headerMuted, cursor:'pointer', width:56 }}>
+      {glyph}
+      <span style={{ fontSize:9.5, letterSpacing:'0.06em', textTransform:'uppercase', fontWeight:600 }}>{label}</span>
+    </div>
+  );
+  return (
+    <div style={{ height:82, flexShrink:0, borderTop:'1px solid '+P.line, background:P.bg,
+      display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 40px 14px',
+      paddingBottom:'calc(14px + env(safe-area-inset-bottom))' }}>
+      {item('Beans', activeTab==='beans', onBeans, <BeansGlyph active={activeTab==='beans'} />)}
+      {item('Stats', activeTab==='stats', onStats, <StatsGlyph active={activeTab==='stats'} />)}
+    </div>
+  );
+}
+
+function Shell({ activeTab, onBeans, onStats, onCafe, onBrew, children }) {
+  const [armed,   setArmed]   = useState(false);
+  const [dragSide, setDragSide] = useState(null); // 'cafe' | 'brew' | null
+  const [dragX,   setDragX]   = useState(0);
+  const st = useRef({ down:false, startX:0, moved:0, side:null });
+  const THRESH = 26, TAP = 6, MAXDRAG = 92;
+
+  const onDown = e => {
+    const wasArmed = armed;
+    st.current = { down:true, startX:e.clientX, moved:0, side:null };
+    setArmed(true); setDragSide(null); setDragX(0);
+    const move = ev => {
+      const s = st.current; if (!s.down) return;
+      const dx = ev.clientX - s.startX;
+      s.moved = Math.max(s.moved, Math.abs(dx));
+      const side = dx <= -THRESH ? 'cafe' : dx >= THRESH ? 'brew' : null;
+      s.side = side; setDragSide(side);
+      setDragX(Math.max(-MAXDRAG, Math.min(MAXDRAG, dx)));
+    };
+    const up = () => {
+      const s = st.current; s.down = false;
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      setDragX(0); setDragSide(null);
+      if (s.side) { setArmed(false); (s.side==='cafe' ? onCafe : onBrew)(); }
+      else if (s.moved < TAP) setArmed(!wasArmed);   // tap toggles the split
+      else setArmed(false);                          // dragged back to center → cancel
+    };
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  };
+  const cancel = () => { setArmed(false); setDragSide(null); setDragX(0); };
+
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}>
+      <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden',
+        filter: armed ? 'blur(7px) saturate(0.92)' : 'none',
+        transform: armed ? 'scale(1.02)' : 'none',
+        transition:'filter 0.18s ease, transform 0.18s ease' }}>
+        {children}
+      </div>
+
+      <CupBar activeTab={activeTab} onBeans={onBeans} onStats={onStats} />
+
+      {armed && <SplitOverlay dragSide={dragSide}
+        onCafe={()=>{ cancel(); onCafe(); }} onBrew={()=>{ cancel(); onBrew(); }} onCancel={cancel} />}
+
+      <div onPointerDown={onDown} style={{ position:'absolute', left:'50%', bottom:22,
+        transform:`translateX(calc(-50% + ${dragX}px))`, width:64, height:64, borderRadius:'50%',
+        background:P.acc, display:'flex', alignItems:'center', justifyContent:'center',
+        zIndex:15, cursor:'pointer', touchAction:'none',
+        boxShadow: armed ? '0 0 0 10px rgba(92,61,40,0.12), 0 12px 26px -8px rgba(92,61,40,0.6)'
+                         : '0 12px 26px -8px rgba(92,61,40,0.6)',
+        transition: dragX ? 'none' : 'transform 0.2s ease, box-shadow 0.18s ease' }}>
+        <CupIcon />
+      </div>
+    </div>
+  );
+}
+
+// Left drawer opened from the home hamburger: identity + the four destinations,
+// each jumping to a section of the Profile screen.
+function Drawer({ open, onClose, onItem, session, entries=[] }) {
+  if (!open) return null;
+  const email = session && session.user && session.user.email;
+  const name  = email ? email.split('@')[0].replace(/^\w/, c=>c.toUpperCase()) : 'Guest';
+  const items = [
+    ['identity',  'Profile'],
+    ['gear',      'My gear & grinders'],
+    ['community', 'Community'],
+    ['settings',  'Settings'],
+  ];
+  return (
+    <div style={{ position:'absolute', inset:0, zIndex:200 }}>
+      <div className="fade-in" onClick={onClose}
+        style={{ position:'absolute', inset:0, background:'rgba(28,20,14,0.36)' }} />
+      <div style={{ position:'absolute', top:0, bottom:0, left:0, width:'78%', maxWidth:300,
+        background:P.paper||P.bg, zIndex:1, boxShadow:'22px 0 40px -10px rgba(40,30,20,0.34)',
+        borderRight:'1px solid '+P.line, transform:'translateX(0)',
+        padding:'calc(40px + env(safe-area-inset-top)) 22px 22px',
+        display:'flex', flexDirection:'column',
+        animation:'slideInLeft 0.24s cubic-bezier(0.32,0.72,0,1)' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12, paddingBottom:20,
+          borderBottom:'1px solid '+P.line }}>
+          <div style={{ width:48, height:48, borderRadius:'50%', flexShrink:0, color:'#fff',
+            background:'linear-gradient(135deg,#B0703A,#5A2E15)', display:'flex',
+            alignItems:'center', justifyContent:'center', fontSize:20, fontWeight:600 }}>
+            {name.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontSize:16, fontWeight:600, color:P.headerText }}>{name}</div>
+            <div style={{ fontSize:11, color:P.headerMuted, marginTop:2 }}>
+              Home barista · {entries.length} cup{entries.length!==1?'s':''}
+            </div>
+          </div>
+        </div>
+        <div style={{ marginTop:6 }}>
+          {items.map(([key,label])=>(
+            <div key={key} onClick={()=>onItem(key)} style={{ display:'flex', alignItems:'center',
+              gap:13, padding:'13px 12px', borderRadius:12, fontSize:14.5, fontWeight:500,
+              color:P.headerText, cursor:'pointer' }}>
+              <div style={{ width:20, height:20, border:'2px solid '+P.acc,
+                borderRadius: key==='identity'||key==='community' ? '50%' : 6, flexShrink:0 }} />
+              {label}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
