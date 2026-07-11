@@ -651,43 +651,32 @@ function ratioStr(dose, water) {
   return '1:' + (w/d).toFixed(1).replace(/\.0$/,'');
 }
 
-function StepperRow({ label, value, unit, step=1, min=0, onChange, placeholder }) {
-  const bump = dir => {
-    const n = numOf(value);
-    const base = n==null ? (numOf(placeholder)||0) : n;
-    onChange(String(Math.max(min, Math.round((base + dir*step)*10)/10)));
-  };
-  const btn = { width:44, height:44, borderRadius:'50%', background:P.cardBg,
-    border:'1px solid '+P.cardStroke, boxShadow:P.shadowSm, color:P.acc, fontSize:22,
-    display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
-    cursor:'pointer', userSelect:'none' };
+// Raised "dial" tile from the Elevation refs: uppercase micro-label, then a
+// row of −  big value(+unit)  +. Steppers render only when onStep is provided;
+// otherwise the value is a plain full-width text input (e.g. non-numeric grind).
+function Dial({ label, value, unit, placeholder, onChange, onStep, inputMode='decimal' }) {
+  const rbtn = { width:34, height:34, borderRadius:'50%', background:P.bg,
+    border:'1px solid '+P.cardStroke, boxShadow:'0 2px 5px -2px rgba(40,30,20,0.22)',
+    color:P.acc, fontSize:18, display:'flex', alignItems:'center', justifyContent:'center',
+    flexShrink:0, cursor:'pointer', userSelect:'none' };
+  const shown = String((value ?? '') || placeholder || '');
+  const w = Math.max(shown.length, 1) + 0.5;
   return (
-    <div style={{ marginTop:12 }}>
+    <div style={{ background:P.cardBg, border:'1px solid '+P.cardStroke, borderRadius:16,
+      boxShadow:P.shadow, padding:'11px 12px 13px', minWidth:0 }}>
       <FieldLabel>{label}</FieldLabel>
-      <div style={{ display:'flex', alignItems:'center', gap:11, marginTop:5 }}>
-        <div style={btn} onClick={()=>bump(-1)}>−</div>
-        <div style={{ flex:1, height:50, background:P.cardBg, border:'1px solid '+P.cardStroke,
-          borderRadius:14, boxShadow:P.shadow, display:'flex', alignItems:'center',
-          justifyContent:'center', padding:'0 14px' }}>
-          <input inputMode="decimal" placeholder={placeholder} value={value||''}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:7, gap:6 }}>
+        {onStep && <div style={rbtn} onClick={()=>onStep(-1)}>−</div>}
+        <div style={{ flex:1, display:'flex', alignItems:'baseline', justifyContent:'center', minWidth:0, overflow:'hidden' }}>
+          <input inputMode={inputMode} placeholder={placeholder} value={value||''}
             onChange={e=>onChange(e.target.value)}
-            style={{ fontSize:26, color:P.headerText, textAlign:'center', flex:1,
-              fontFamily:'Hanken Grotesk, sans-serif', fontWeight:400 }} />
-          {unit && <span style={{ fontSize:12, color:P.headerMuted, flexShrink:0 }}>{unit}</span>}
+            style={{ fontSize:27, fontWeight:400, color:P.headerText, textAlign:'center',
+              width: onStep ? `${w}ch` : '100%', maxWidth:'100%', letterSpacing:'-0.01em',
+              fontFamily:'Hanken Grotesk, sans-serif' }} />
+          {unit && <span style={{ fontSize:12, color:P.headerMuted, flexShrink:0, marginLeft:1 }}>{unit}</span>}
         </div>
-        <div style={btn} onClick={()=>bump(1)}>+</div>
+        {onStep && <div style={rbtn} onClick={()=>onStep(1)}>+</div>}
       </div>
-    </div>
-  );
-}
-
-function MiniTile({ label, children }) {
-  return (
-    <div style={{ flex:1, background:P.cardBg, border:'1px solid '+P.cardStroke,
-      borderRadius:13, boxShadow:P.shadow, padding:'9px 6px', textAlign:'center', minWidth:0 }}>
-      <FieldLabel style={{ textAlign:'center' }}>{label}</FieldLabel>
-      <div style={{ fontSize:16, marginTop:5, display:'flex', alignItems:'center',
-        justifyContent:'center', gap:5 }}>{children}</div>
     </div>
   );
 }
@@ -1775,10 +1764,12 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
     // method-specific params (used by METHOD_SCHEMAS; empty for methods that don't need them)
     bloomWater:'', bloomTime:'', pours:'', steepTime:'', secondSteep:'', preInfusion:'', pressure:'', basket:'' };
   const initObj = { ...defaults,
-    ...(ownedMethods.length && !initial.method  ? { method:  ownedMethods[0] } : {}),
     ...(grinders.length===1 && !initial.grinder ? { grinder: grinders[0].n }   : {}),
     ...(machines.length===1 && !initial.machine ? { machine: machines[0].n }   : {}),
-    ...initial };
+    ...initial,
+    // a method is always selected (matches the design); an empty incoming method
+    // (e.g. from quick-capture expand) falls back to owned gear or V60
+    method: initial.method || (ownedMethods.length ? ownedMethods[0] : 'V60') };
   const [f, setF] = useState(initObj);
   const [showAllMethods, setShowAllMethods] = useState(ownedMethods.length===0);
   const initStr = useRef(JSON.stringify(initObj));
@@ -1805,7 +1796,7 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
   const grindPh = grindMax ? `0–${grindMax}`
     : activeGrinder
       ? (activeGrinder.adj==='clicks' ? 'e.g. 24 clicks' : activeGrinder.adj==='dial' ? 'e.g. 6.5' : 'e.g. fine, medium')
-      : 'Medium-fine';
+      : ((getMethodSchema(f.method).fields.find(x=>x[1]==='grindSize')||[])[2] || 'Medium-fine');
   const clampGrind = v => {
     if (v === '') { set('grindSize', ''); return; }
     const n = parseFloat(v);
@@ -1825,8 +1816,8 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
   });
 
   // Partition the method schema's fields into the Elevation layout:
-  //  - dose/water -> big stepper rows;  ratio -> derived readout band
-  //  - grind/temp + the method's main time field -> mini-tile row
+  //  - dose / water / grind / time -> the 2×2 raised "dial" grid
+  //  - ratio -> derived readout band;  temp -> a gear chip
   //  - everything else -> the Advanced drawer
   const allFields = getMethodSchema(f.method).fields;
   const fieldOf = k => allFields.find(x => x[1]===k);
@@ -1835,8 +1826,25 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
   const timeKey = fieldOf('brewTime') ? 'brewTime' : fieldOf('steepTime') ? 'steepTime' : null;
   const coreKeys = new Set(['dose','water','grindSize','temp','ratio', timeKey]);
   const extras = allFields.filter(([,k]) => !coreKeys.has(k));
-  const doseF = fieldOf('dose'), waterF = fieldOf('water'), tempF = fieldOf('temp'), timeF = timeKey && fieldOf(timeKey);
+  const doseF = fieldOf('dose'), waterF = fieldOf('water'), timeF = timeKey && fieldOf(timeKey);
   const autoRatio = ratioStr(f.dose, f.water);
+  const ratioLabel = isEsp ? 'Brew ratio' : 'Ratio';
+  const advLabel   = isEsp ? 'Advanced · pre-infusion · pressure · notes' : 'Advanced · notes · rating';
+  // Grind coarseness hint shown inline in the dial label ("Grind · fine"), taken
+  // from the schema's grind placeholder when it's fine/coarse (V60 stays plain).
+  const grindHint = (() => { const ph = (fieldOf('grindSize')||[])[2] || ''; return /fine|coarse/i.test(ph) ? ph.toLowerCase() : ''; })();
+  // Espresso shot time steps in whole seconds ("28 s"); pour-over/immersion in m:ss.
+  const timeIsSec = isEsp && timeKey === 'brewTime';
+  const bumpNum = (key, dir, step, ph) => {
+    const cur = numOf(f[key]);
+    const base = cur==null ? (numOf(ph) || 0) : cur;
+    set(key, String(Math.max(0, Math.round((base + dir*step)*10)/10)));
+  };
+  const bumpTime = dir => {
+    const cur = parseTimeStr(f[timeKey]) || parseTimeStr(timeF && timeF[2]) || 0;
+    const next = Math.max(0, cur + dir*(timeIsSec ? 1 : 5));
+    set(timeKey, timeIsSec ? String(next) : fmtSec(next));
+  };
   const bumpGrind = dir => {
     const n = numOf(f.grindSize);
     const base = n==null ? (numOf(grindSuggestion) ?? Math.round(grindMax/2)) : n;
@@ -1890,64 +1898,68 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
           const hist = entries.filter(e => e.type==='brew' && e.beanName && e.beanName===f.beanName && e.method===f.method);
           return hist.length>0 ? <DialInPanel last={hist[0]} attempt={hist.length+1} grinder={activeGrinder} /> : null;
         })()}
-        {/* Primary editables — raised steppers */}
-        <StepperRow label={nameOf(doseF)||'Dose'} value={f.dose} unit={unitOf(doseF)||'g'}
-          step={isEsp?0.5:1} placeholder={String(numOf(doseF&&doseF[2])||15)} onChange={v=>set('dose',v)} />
-        <StepperRow label={nameOf(waterF)||'Water'} value={f.water} unit={unitOf(waterF)||'ml'}
-          step={isEsp?1:10} placeholder={String(numOf(waterF&&waterF[2])||250)} onChange={v=>set('water',v)} />
+        {/* 2×2 dial grid — the four raised, tactile editables */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginTop:12 }}>
+          <Dial label={nameOf(doseF)||'Dose'} value={f.dose} unit={unitOf(doseF)||'g'}
+            placeholder={String(numOf(doseF&&doseF[2])||15)}
+            onChange={v=>set('dose',v)} onStep={d=>bumpNum('dose', d, isEsp?0.5:1, doseF&&doseF[2])} />
+          <Dial label={nameOf(waterF)||'Water'} value={f.water} unit={unitOf(waterF)||'g'}
+            placeholder={String(numOf(waterF&&waterF[2])||250)}
+            onChange={v=>set('water',v)} onStep={d=>bumpNum('water', d, isEsp?1:5, waterF&&waterF[2])} />
+          <Dial label={grindHint ? `Grind · ${grindHint}` : 'Grind'} value={f.grindSize}
+            placeholder={grindPh} inputMode={grindMax?'decimal':'text'}
+            onChange={v=> grindMax ? clampGrind(v) : set('grindSize', v)}
+            onStep={grindMax ? bumpGrind : null} />
+          {timeF && (
+            <Dial label={nameOf(timeF)} value={f[timeKey]} unit={timeIsSec ? 's' : ''}
+              placeholder={timeIsSec ? String(parseTimeStr(timeF[2])||28) : (timeF[2]||'3:00')}
+              inputMode={timeIsSec ? 'decimal' : 'text'}
+              onChange={v=>set(timeKey,v)} onStep={bumpTime} />
+          )}
+        </div>
 
         {/* Derived — flat tinted readout */}
-        <RatioBand value={autoRatio || f.ratio} tag={autoRatio ? 'auto' : ''} />
+        <RatioBand label={ratioLabel} value={autoRatio || f.ratio} tag={autoRatio ? 'auto' : ''} />
 
-        {/* Gear chips */}
-        {(grinders.length>0 || (isEsp && machines.length>0)) && (
-          <div style={{ marginTop:14 }}>
-            <div className="scroll-x" style={{ display:'flex', gap:6 }}>
-              {grinders.length>0 && (
-                <GearChip k="Grinder" value={f.grinder} active={gearPick==='grinder'}
-                  onPress={()=>setGearPick(p=>p==='grinder'?null:'grinder')} />
-              )}
-              {isEsp && machines.length>0 && (
-                <GearChip k="Machine" value={f.machine} active={gearPick==='machine'}
-                  onPress={()=>setGearPick(p=>p==='machine'?null:'machine')} />
-              )}
-            </div>
-            {gearPick==='grinder' && (
-              <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginTop:8 }}>
-                {grinders.map(g=><GhostChip key={g.id} label={g.n} active={f.grinder===g.n}
-                  onPress={()=>{ set('grinder', f.grinder===g.n?'':g.n); setGearPick(null); }} />)}
-              </div>
+        {/* Gear chips — Grinder, Machine (espresso), Temp */}
+        <div style={{ marginTop:14 }}>
+          <div className="scroll-x" style={{ display:'flex', gap:6 }}>
+            {grinders.length>0 && (
+              <GearChip k="Grinder" value={f.grinder} active={gearPick==='grinder'}
+                onPress={()=>setGearPick(p=>p==='grinder'?null:'grinder')} />
             )}
-            {gearPick==='machine' && (
-              <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginTop:8 }}>
-                {machines.map(g=><GhostChip key={g.id} label={g.n} active={f.machine===g.n}
-                  onPress={()=>{ set('machine', f.machine===g.n?'':g.n); setGearPick(null); }} />)}
-              </div>
+            {isEsp && machines.length>0 && (
+              <GearChip k="Machine" value={f.machine} active={gearPick==='machine'}
+                onPress={()=>setGearPick(p=>p==='machine'?null:'machine')} />
             )}
+            <GearChip k="Temp" value={f.temp} active={gearPick==='temp'}
+              onPress={()=>setGearPick(p=>p==='temp'?null:'temp')} />
           </div>
-        )}
-
-        {/* Secondary editables — mini tiles */}
-        <div style={{ display:'flex', gap:9, marginTop:16 }}>
-          <MiniTile label="Grind">
-            {grindMax && <span onClick={()=>bumpGrind(-1)} style={{ color:P.acc, fontSize:14, cursor:'pointer', userSelect:'none' }}>−</span>}
-            <input inputMode={grindMax?'decimal':'text'} placeholder={grindPh} value={f.grindSize}
-              onChange={e=> grindMax ? clampGrind(e.target.value) : set('grindSize', e.target.value)}
-              style={{ fontSize:16, color:P.headerText, width:grindMax?36:'100%', textAlign:'center',
-                fontFamily:'Hanken Grotesk, sans-serif' }} />
-            {grindMax && <span onClick={()=>bumpGrind(1)} style={{ color:P.acc, fontSize:14, cursor:'pointer', userSelect:'none' }}>+</span>}
-          </MiniTile>
-          <MiniTile label="Temp">
-            <input placeholder={(tempF&&tempF[2])||'94°C'} value={f.temp} onChange={e=>set('temp',e.target.value)}
-              style={{ fontSize:16, color:P.headerText, width:'100%', textAlign:'center',
-                fontFamily:'Hanken Grotesk, sans-serif' }} />
-          </MiniTile>
-          {timeF && (
-            <MiniTile label={nameOf(timeF)}>
-              <input placeholder={timeF[2]} value={f[timeKey]} onChange={e=>set(timeKey,e.target.value)}
-                style={{ fontSize:16, color:P.headerText, width:'100%', textAlign:'center',
-                  fontFamily:'Hanken Grotesk, sans-serif' }} />
-            </MiniTile>
+          {gearPick==='grinder' && (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginTop:8 }}>
+              {grinders.map(g=><GhostChip key={g.id} label={g.n} active={f.grinder===g.n}
+                onPress={()=>{ set('grinder', f.grinder===g.n?'':g.n); setGearPick(null); }} />)}
+            </div>
+          )}
+          {gearPick==='machine' && (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginTop:8 }}>
+              {machines.map(g=><GhostChip key={g.id} label={g.n} active={f.machine===g.n}
+                onPress={()=>{ set('machine', f.machine===g.n?'':g.n); setGearPick(null); }} />)}
+            </div>
+          )}
+          {gearPick==='temp' && (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginTop:8, alignItems:'center' }}>
+              {[88,90,92,93,94,95,96,98,100].map(t=>(
+                <GhostChip key={t} label={`${t}°`} active={f.temp===`${t}°`}
+                  onPress={()=>{ set('temp', `${t}°`); setGearPick(null); }} />
+              ))}
+              <div style={{ display:'flex', alignItems:'center', border:'1px solid '+G.chipBorder,
+                borderRadius:20, padding:'3px 11px' }}>
+                <input inputMode="decimal" placeholder="custom" value={f.temp}
+                  onChange={e=>set('temp', e.target.value)}
+                  style={{ fontSize:10, color:P.headerText, width:58, fontFamily:'IBM Plex Mono, monospace' }} />
+              </div>
+            </div>
           )}
         </div>
         {activeGrinder && grindSuggestion && (
@@ -1960,7 +1972,7 @@ function BrewForm({ initial={}, onBack, onSave, onUpdate, beans=[], entries=[], 
         <div onClick={()=>setAdv(a=>!a)} style={{ display:'flex', justifyContent:'space-between',
           alignItems:'center', padding:'12px 2px', borderTop:'1px solid '+P.line,
           borderBottom:'1px solid '+P.line, marginTop:16, cursor:'pointer' }}>
-          <span style={{ fontSize:12.5, fontWeight:500, color:P.acc }}>Advanced · notes · rating</span>
+          <span style={{ fontSize:12.5, fontWeight:500, color:P.acc }}>{advLabel}</span>
           <span style={{ fontSize:15, color:P.acc, transform:adv?'rotate(90deg)':'none',
             transition:'transform 0.15s', display:'inline-block' }}>›</span>
         </div>
