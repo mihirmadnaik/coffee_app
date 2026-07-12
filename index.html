@@ -2962,10 +2962,13 @@ function BeanPicker({ beans=[], value='', onChange, onBeanSelect }) {
 }
 
 // ── Entry Detail ──────────────────────────────────────────────────────────────
-function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain, onStartTimer }) {
+function EntryDetail({ entry, onBack, onEdit, onDelete, beans=[], onPinDialed, onBrewAgain, onStartTimer }) {
   const [pinned, setPinned] = useState(false);
   const [shared, setShared] = useState(false);
   const isBrew = entry.type === 'brew';
+  const handleDelete = () => {
+    if (onDelete && window.confirm('Delete this entry? This can’t be undone.')) onDelete(entry.id);
+  };
   const canPin = isBrew && onPinDialed && beans.some(b => b.name===entry.beanName);
   const shareRecipe = () => {
     if (shared) return;
@@ -3088,6 +3091,15 @@ function EntryDetail({ entry, onBack, onEdit, beans=[], onPinDialed, onBrewAgain
             {entry.notes && <div style={{fontSize:12,color:G.text,fontFamily:'IBM Plex Mono, monospace',fontWeight:300,lineHeight:1.6,marginBottom:10}}>{entry.notes}</div>}
             <DetailRow label="What I'd Change" value={entry.whatIdChange} />
             <DetailRow label="Recipe / Steps" value={entry.recipe} />
+          </>
+        )}
+        {onDelete && (
+          <>
+            <FormDivider />
+            <div onClick={handleDelete} style={{ marginTop:8, padding:'12px', borderRadius:12,
+              textAlign:'center', cursor:'pointer', border:'1px solid rgba(169,54,34,0.4)' }}>
+              <span style={{ fontSize:12.5, fontWeight:600, color:'#A93622' }}>Delete entry</span>
+            </div>
           </>
         )}
         <div style={{height:32}} />
@@ -3397,6 +3409,15 @@ function App() {
     setView('entry-detail');
   };
 
+  // Delete a logged entry and record a tombstone so the deletion propagates on
+  // the next cloud sync (same mechanism gear removal uses).
+  const deleteEntry = id => {
+    setEntries(prev => prev.filter(e => e.id !== id));
+    setPendingDeletes(p => [...new Set([...p, 'entry:'+id])]);
+    setSelEntry(null);
+    setView('home');
+  };
+
   const updateBean = bean => {
     setBeans(prev => prev.map(b => b.id===bean.id ? bean : b));
     setSelBean(bean);
@@ -3455,7 +3476,7 @@ function App() {
         <StatsDash   entries={entries} />
       </Shell>}
       {view==='profile'      && <ProfileScreen entries={entries} beans={beans} onBack={goHome} focusSection={profileSection} gear={gear} onGearChange={setGear} onGearRemove={removeGear} gearCatalog={gearCatalog} session={session} syncState={syncState} lastSyncAt={lastSyncAt} onSync={doSync} onExport={exportData} onImport={importData} timerMode={timerMode} onTimerModeChange={setTimerMode} />}
-      {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} beans={beans} onPinDialed={pinDialed} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
+      {view==='entry-detail' && selectedEntry && <EntryDetail entry={selectedEntry} onBack={()=>setView('home')} onEdit={()=>{ setInit(selectedEntry); setView(selectedEntry.type==='cafe'?'cafe-form-edit':'brew-form-edit'); }} onDelete={deleteEntry} beans={beans} onPinDialed={pinDialed} onBrewAgain={brewAgain} onStartTimer={startTimer} />}
       {view==='bean-detail'  && selectedBean  && <BeanDetail  bean={selectedBean}  onBack={()=>setView('beans')} onEdit={()=>{ setInit(selectedBean); setView('bean-form-edit'); }} entries={entries} onBrewNow={startTimer} communityRecipes={community.recipes} />}
       {view==='brew-timer'   && timerRecipe   && <TimerScreen recipe={timerRecipe} onCancel={()=>setView('home')} onLog={saveEntry} mode={timerMode} />}
       {view==='cafe-form'    && <CafeForm  initial={formInit} onBack={()=>setView('home')}         onSave={saveEntry}   customNotes={customNotes} onAddNote={setCustomNotes} customDrinks={customDrinks} onAddDrink={setCustomDrinks} />}
